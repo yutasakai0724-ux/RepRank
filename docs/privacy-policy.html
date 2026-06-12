@@ -74,7 +74,7 @@
     <p>プライバシーポリシー / Privacy Policy</p>
   </header>
 
-  <span class="badge">最終更新: 2026年5月28日</span>
+  <span class="badge">最終更新: 2026年6月13日</span>
 
   <p>
     Rep Rank（以下「本アプリ」）をご利用いただきありがとうございます。
@@ -117,10 +117,23 @@
     <li>個人を特定する情報（氏名・メールアドレス・正確な体重・トレーニング全履歴等）は送信されません</li>
   </ul>
 
-  <p><strong>2.4 認証情報</strong></p>
+  <p><strong>2.4 アカウントおよびクラウド同期データ（オプトイン・任意）</strong></p>
   <ul>
-    <li>2.3 のデータ送信時、Firebase Authentication により自動的に匿名認証（uid のみ発行）を行います</li>
-    <li>uid はデータと紐づけて保存されません（書き込み認可のためのみに使用）</li>
+    <li>送信先: Firebase Authentication / Firebase Firestore</li>
+    <li>対象: アカウント登録（メールアドレス・Google・Apple・Facebook）を行った場合のみ</li>
+    <li>内容: ワークアウトの記録（種目名・重量・回数・日時）をクラウドにバックアップ</li>
+    <li>目的: 機種変更時のデータ引き継ぎ、複数デバイス間での同期</li>
+    <li>データはご自身のアカウントにのみ紐づけられ、他のユーザーはアクセスできません</li>
+    <li>アカウント登録をしない場合、この情報は一切送信されません</li>
+  </ul>
+
+  <p><strong>2.5 広告（自動・常時）</strong></p>
+  <ul>
+    <li>送信先: Google AdMob（Google LLC）</li>
+    <li>内容: 広告の表示に必要な匿名の端末情報</li>
+    <li>目的: アプリの運営・開発の継続</li>
+    <li>行動ターゲティング広告は使用しません。IDFA（広告識別子）の取得は行いません</li>
+    <li>Google のプライバシーポリシー: <a href="https://policies.google.com/privacy" target="_blank">https://policies.google.com/privacy</a></li>
   </ul>
 
   <h2>3. 情報の利用目的</h2>
@@ -130,23 +143,29 @@
     <li>1RM 推定・強度レベルの算出</li>
     <li>アプリの不具合修正および品質向上</li>
     <li>強度分布データの集計（匿名統計データを共有した場合のみ）</li>
+    <li>クラウドバックアップおよびデバイス間同期（アカウント登録した場合のみ）</li>
   </ul>
 
   <h2>4. 第三者への提供</h2>
   <p>
     本アプリはあなたの個人情報を販売しません。
-    上記 Firebase サービス以外の第三者にデータを提供することはありません。
+    上記 Firebase サービスおよび Google AdMob 以外の第三者にデータを提供することはありません。
   </p>
 
-  <h2>5. 広告・トラッキング</h2>
+  <h2>5. 広告について</h2>
   <p>
-    本アプリは広告を表示せず、行動トラッキングや IDFA の取得も行いません。
-    Firebase Analytics による使用状況データは広告目的に使用されません。
+    本アプリは Google AdMob によるバナー広告およびリワード広告を表示します。
+    広告はユーザーの行動履歴に基づくターゲティングを行わず、IDFA（広告識別子）も取得しません。
   </p>
 
   <h2>6. データの削除</h2>
   <p>
     アプリをデバイスから削除することで、ローカルに保存されたすべてのデータが完全に削除されます。
+  </p>
+  <p>
+    クラウド同期を利用している場合は、アプリ内のプロフィール画面からアカウントを削除することで、クラウド上のデータも削除されます。
+  </p>
+  <p>
     匿名で送信済みの統計データおよび Analytics データは個人を特定できないため、個別の削除リクエストには対応できません。
   </p>
 
@@ -188,7 +207,7 @@
   <h2>2. Information Sent to External Services</h2>
   <p>Rep Rank uses Firebase services provided by Google LLC to improve app quality. The following data may be transmitted:</p>
 
-  <p><strong>2.1 Crash & Diagnostic Data (automatic, always on)</strong></p>
+  <p><strong>2.1 Crash &amp; Diagnostic Data (automatic, always on)</strong></p>
   <ul>
     <li>Destination: Firebase Crashlytics</li>
     <li>Content: Stack traces on crash, device model, OS version, app version</li>
@@ -213,10 +232,23 @@
     <li>No personally identifiable information (name, email, exact weight, full training history, etc.) is sent</li>
   </ul>
 
-  <p><strong>2.4 Authentication</strong></p>
+  <p><strong>2.4 Account &amp; Cloud Sync Data (opt-in, optional)</strong></p>
   <ul>
-    <li>When sending data in 2.3, Firebase Authentication issues an anonymous UID automatically</li>
-    <li>The UID is not stored alongside data — it is used solely for write authorization</li>
+    <li>Destination: Firebase Authentication / Firebase Firestore</li>
+    <li>Applies only when you create an account (email, Google, Apple, or Facebook sign-in)</li>
+    <li>Content: Workout records (exercise names, weights, reps, timestamps) backed up to the cloud</li>
+    <li>Purpose: Data transfer when changing devices, sync across devices</li>
+    <li>Data is linked exclusively to your account and is inaccessible to other users</li>
+    <li>If you do not create an account, none of this information is transmitted</li>
+  </ul>
+
+  <p><strong>2.5 Advertising (automatic, always on)</strong></p>
+  <ul>
+    <li>Destination: Google AdMob (Google LLC)</li>
+    <li>Content: Anonymous device information required for ad delivery</li>
+    <li>Purpose: Sustaining app development and operations</li>
+    <li>Behavioral targeting ads are not used. IDFA is not collected</li>
+    <li>Google Privacy Policy: <a href="https://policies.google.com/privacy" target="_blank">https://policies.google.com/privacy</a></li>
   </ul>
 
   <h2>3. How We Use Information</h2>
@@ -225,16 +257,19 @@
     <li>Estimate 1RM and calculate strength levels</li>
     <li>Fix bugs and improve app quality</li>
     <li>Aggregate strength distribution data (only when anonymous stats are shared)</li>
+    <li>Cloud backup and cross-device sync (only when an account is created)</li>
   </ul>
 
   <h2>4. Third-Party Sharing</h2>
-  <p>We do not sell your personal information. We do not share data with any third parties other than the Firebase services described above.</p>
+  <p>We do not sell your personal information. We do not share data with any third parties other than the Firebase services and Google AdMob described above.</p>
 
-  <h2>5. Advertising & Tracking</h2>
-  <p>Rep Rank contains no ads and does not perform behavioral tracking or use IDFA. Usage data collected via Firebase Analytics is never used for advertising purposes.</p>
+  <h2>5. Advertising</h2>
+  <p>Rep Rank displays banner and rewarded ads via Google AdMob. Ads are not behaviorally targeted and IDFA is not collected.</p>
 
   <h2>6. Data Deletion</h2>
-  <p>Uninstalling the app from your device permanently deletes all locally stored data. Anonymous statistics and Analytics data cannot be deleted individually as they contain no personally identifiable information.</p>
+  <p>Uninstalling the app from your device permanently deletes all locally stored data.</p>
+  <p>If you use cloud sync, you can delete your cloud data by deleting your account from the Profile screen within the app.</p>
+  <p>Anonymous statistics and Analytics data cannot be deleted individually as they contain no personally identifiable information.</p>
 
   <h2>7. Children's Privacy</h2>
   <p>Rep Rank is not directed to children under 13, and we do not knowingly collect information from children under 13.</p>
