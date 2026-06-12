@@ -81,13 +81,17 @@
     本ポリシーでは、本アプリがどのようにデータを取り扱うかを説明します。
   </p>
 
-  <h2>1. デバイス上に保存する情報</h2>
-  <p>本アプリは以下の情報を<strong>あなたのデバイス上のローカルストレージにのみ</strong>保存します。</p>
+  <h2>1. 保存される情報</h2>
+  <p>本アプリは以下の情報を保存します。</p>
   <ul>
     <li>ワークアウトの記録（種目名・重量・回数・日時）</li>
     <li>ルーチン（マイセット）の設定</li>
     <li>プロフィール情報（ユーザー名・体重・性別）</li>
   </ul>
+  <p>
+    <strong>アカウント未登録の場合</strong>: 上記のデータはすべてデバイス上のローカルストレージにのみ保存され、外部には送信されません。<br>
+    <strong>アカウント登録済みの場合</strong>: 上記のデータはデバイス上のローカルストレージに加え、クラウド（Firebase Firestore）にも保存されます（詳細は 2.4 を参照）。
+  </p>
 
   <h2>2. 外部に送信される情報</h2>
   <p>本アプリは品質向上のため Google LLC が提供する Firebase サービスを利用しており、以下の情報を送信する場合があります。</p>
@@ -196,13 +200,17 @@
     Thank you for using Rep Rank. This policy explains how your data is handled.
   </p>
 
-  <h2>1. Information Stored on Your Device</h2>
-  <p>Rep Rank stores the following data <strong>locally on your device only</strong>:</p>
+  <h2>1. Information We Store</h2>
+  <p>Rep Rank stores the following data:</p>
   <ul>
     <li>Workout records (exercise names, weights, reps, timestamps)</li>
     <li>Routine (My Set) configurations</li>
     <li>Profile information (username, body weight, gender)</li>
   </ul>
+  <p>
+    <strong>Without an account:</strong> All of the above is stored locally on your device only and is never transmitted externally.<br>
+    <strong>With an account:</strong> The above data is stored both locally on your device and in the cloud (Firebase Firestore). See section 2.4 for details.
+  </p>
 
   <h2>2. Information Sent to External Services</h2>
   <p>Rep Rank uses Firebase services provided by Google LLC to improve app quality. The following data may be transmitted:</p>
