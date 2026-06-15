@@ -1,24 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'theme.dart';
 import 'data/database_helper.dart';
 import 'repositories/sqlite_workout_repository.dart';
+import 'repositories/firestore_workout_repository.dart';
+import 'repositories/hybrid_workout_repository.dart';
+import 'services/firebase_init.dart';
+import 'services/analytics_service.dart';
+import 'services/ad_service.dart';
+import 'services/auth_service.dart';
+import 'services/sync_service.dart';
 import 'services/session_manager.dart';
+import 'services/user_preferences.dart';
 import 'screens/analysis_screen.dart';
+import 'screens/privacy_consent_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/exercise_record_screen.dart';
 import 'screens/routines_screen.dart';
 import 'screens/profile_screen.dart';
 import 'widgets/exercise_picker_sheet.dart';
+import 'widgets/banner_ad_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 縦画面固定（Info.plist に加えてコードでも保証）
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  // リポジトリを初期化して SessionManager に注入
-  final repository = SqliteWorkoutRepository(DatabaseHelper.instance);
-  SessionManager.instance.init(repository);
+  await FirebaseInit.initialize();
+  await AdService.instance.initialize();
+
+  // 初期リポジトリ（SQLiteのみ）で起動
+  final local = SqliteWorkoutRepository(DatabaseHelper.instance);
+  SessionManager.instance.init(local);
+
+  // ログイン済みならハイブリッドリポジトリに差し替え
+  final user = AuthService.instance.currentUser;
+  if (user != null && !user.isAnonymous) {
+    _switchToHybrid(user.uid);
+  }
+
   runApp(const MyApp());
+}
+
+/// ログイン時にリポジトリをハイブリッド（SQLite + Firestore）に切り替える
+void _switchToHybrid(String uid) {
+  final local = SqliteWorkoutRepository(DatabaseHelper.instance);
+  final cloud = FirestoreWorkoutRepository(uid);
+  SessionManager.instance.init(
+    HybridWorkoutRepository(local: local, cloud: cloud),
+  );
+}
+
+/// ローカルのみのリポジトリに戻す（ログアウト時）
+void _switchToLocal() {
+  final local = SqliteWorkoutRepository(DatabaseHelper.instance);
+  SessionManager.instance.init(local);
 }
 
 class MyApp extends StatelessWidget {
@@ -30,9 +65,50 @@ class MyApp extends StatelessWidget {
       title: 'Rep Rank',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: const MainNavigation(),
+      home: const _AuthGate(),
     );
   }
+}
+
+/// 認証状態を監視してリポジトリを切り替えるゲート。
+/// UIは変えず、バックグラウンドで同期処理を行う。
+class _AuthGate extends StatefulWidget {
+  const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    AuthService.instance.authStateChanges.listen(_onAuthChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPrivacyConsent());
+  }
+
+  Future<void> _onAuthChanged(User? user) async {
+    if (user != null && !user.isAnonymous) {
+      _switchToHybrid(user.uid);
+      await SyncService.instance.syncOnLogin(user.uid);
+    } else {
+      _switchToLocal();
+    }
+  }
+
+  Future<void> _checkPrivacyConsent() async {
+    final consented = await UserPreferences.instance.hasConsentedToPrivacy();
+    if (consented || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const PrivacyConsentScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => const MainNavigation();
 }
 
 class MainNavigation extends StatefulWidget {
@@ -45,7 +121,13 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
-  // タブ切り替えごとに再生成することで常にフレッシュなデータを表示
+  static const _screenNames = ['analysis', 'history', 'routines', 'profile'];
+
+  void _onTabTapped(int index) {
+    setState(() => _currentIndex = index);
+    AnalyticsService.instance.logScreenView(_screenNames[index]);
+  }
+
   Widget _buildScreen(int index) {
     switch (index) {
       case 0: return const AnalysisScreen();
@@ -59,7 +141,12 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _buildScreen(_currentIndex),
+      body: Column(
+        children: [
+          Expanded(child: _buildScreen(_currentIndex)),
+          const BannerAdWidget(),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openExercisePicker(context),
         backgroundColor: kPrimary,
@@ -97,27 +184,24 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget _navItem(int idx, IconData icon, IconData activeIcon, String label) {
     final active = _currentIndex == idx;
     return InkWell(
-      onTap: () => setState(() => _currentIndex = idx),
+      onTap: () => _onTabTapped(idx),
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              active ? activeIcon : icon,
-              size: 22,
-              color: active ? kPrimary : kOnSurfaceVariant,
-            ),
+            Icon(active ? activeIcon : icon,
+                size: 22,
+                color: active ? kPrimary : kOnSurfaceVariant),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                color: active ? kPrimary : kOnSurfaceVariant,
-              ),
-            ),
+            Text(label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight:
+                      active ? FontWeight.w600 : FontWeight.w400,
+                  color: active ? kPrimary : kOnSurfaceVariant,
+                )),
           ],
         ),
       ),
@@ -130,13 +214,22 @@ class _MainNavigationState extends State<MainNavigation> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => ExercisePickerSheet(
-        onSelected: (exercise) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
+        onSelected: (exercise) async {
+          final existing =
+              await SessionManager.instance.findTodayExercise(exercise.name);
+          if (!context.mounted) return;
+          if (existing != null) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => ExerciseRecordScreen(
+                exercise: existing.exercise,
+                sessionId: existing.session.id,
+              ),
+            ));
+          } else {
+            Navigator.push(context, MaterialPageRoute(
               builder: (_) => ExerciseRecordScreen(exercise: exercise),
-            ),
-          );
+            ));
+          }
         },
       ),
     );

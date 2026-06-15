@@ -62,5 +62,31 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<!-- Google AdMob アプリID（本番前に AdMob Console の実際の ID に差し替える） -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3054041824701944~9672660247</string>
+	<!-- 標準暗号化のみ使用 (HTTPS/SQLite等) → 輸出規制対象外 -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- url_launcher: 外部リンク（プライバシーポリシー等）に必要 -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+	</array>
+	<!-- Google Sign-In の REVERSED_CLIENT_ID -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.960167971414-v6cdknd81mq1mcr8olsnb9stmqqnlrjn</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -3,9 +3,6 @@ import '../repositories/workout_repository.dart';
 
 /// アクティブなワークアウトセッションをメモリ上で管理し、
 /// リポジトリへの読み書きも仲介するシングルトン。
-///
-/// 画面は SessionManager 経由でデータにアクセスするため、
-/// リポジトリ実装（SQLite / Firestore）を意識しない。
 class SessionManager {
   SessionManager._();
   static final SessionManager instance = SessionManager._();
@@ -22,8 +19,18 @@ class SessionManager {
 
   WorkoutSession? get active => _active;
 
-  /// セッションが存在しなければ新規作成、あれば既存を返す
+  /// セッションが存在しなければ新規作成、あれば既存を返す。
+  /// アクティブセッションが別日の場合は破棄して新規作成。
   WorkoutSession getOrCreate({String? sessionName, String? routineName}) {
+    if (_active != null) {
+      final today = DateTime.now();
+      final d = _active!.date;
+      if (d.year != today.year ||
+          d.month != today.month ||
+          d.day != today.day) {
+        _active = null; // 別日のセッションを破棄
+      }
+    }
     _active ??= WorkoutSession(
       sessionName: sessionName,
       routineName: routineName,
@@ -33,7 +40,7 @@ class SessionManager {
     return _active!;
   }
 
-  /// 種目を保存し、DB に即座に書き込む
+  /// 種目を保存し、DB に即座に書き込む（アクティブセッション用）
   Future<void> saveExercise(Exercise exercise) async {
     final session = getOrCreate();
     final idx = session.exercises.indexWhere((e) => e.name == exercise.name);
@@ -43,6 +50,51 @@ class SessionManager {
       session.exercises.add(exercise);
     }
     await _repo.upsertSession(session);
+  }
+
+  /// 既存セッションの種目を更新して DB に保存（編集モード用）
+  Future<void> saveExerciseToExistingSession(
+      String sessionId, Exercise exercise) async {
+    // アクティブセッションの場合はそのまま saveExercise を流用
+    if (_active?.id == sessionId) {
+      await saveExercise(exercise);
+      return;
+    }
+    // 過去のセッションは DB から取得して更新
+    final sessions = await _repo.getAllSessions();
+    final session = sessions.where((s) => s.id == sessionId).firstOrNull;
+    if (session == null) return;
+    final idx = session.exercises.indexWhere((e) => e.name == exercise.name);
+    if (idx >= 0) {
+      session.exercises[idx] = exercise;
+    } else {
+      session.exercises.add(exercise);
+    }
+    await _repo.upsertSession(session);
+  }
+
+  /// 今日の記録に指定種目があれば返す（同日同種目チェック用）
+  Future<({WorkoutSession session, Exercise exercise})?> findTodayExercise(
+      String exerciseName) async {
+    final today = DateTime.now();
+    // アクティブセッション（今日）をチェック
+    if (_active != null) {
+      final d = _active!.date;
+      if (d.year == today.year &&
+          d.month == today.month &&
+          d.day == today.day) {
+        final ex =
+            _active!.exercises.where((e) => e.name == exerciseName).firstOrNull;
+        if (ex != null) return (session: _active!, exercise: ex);
+      }
+    }
+    // DB から今日のセッションをチェック
+    final todaySessions = await _repo.getSessionsForDate(today);
+    for (final s in todaySessions) {
+      final ex = s.exercises.where((e) => e.name == exerciseName).firstOrNull;
+      if (ex != null) return (session: s, exercise: ex);
+    }
+    return null;
   }
 
   /// セッション終了（finishedAt を記録して DB 保存）
@@ -70,7 +122,6 @@ class SessionManager {
   /// 指定種目の過去最高ベストセット（1RM が最大のセット）
   Future<WorkoutSet?> getPreviousBest(String exerciseName) async {
     final sessions = await _repo.getAllSessions();
-    // アクティブセッションは除外（まだ確定していない）
     final allSets = sessions
         .where((s) => s.id != _active?.id)
         .expand((s) => s.exercises)

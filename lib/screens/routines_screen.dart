@@ -16,26 +16,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
   int _tabIndex = 0;      // 0: マイセット, 1: すべての種目
   bool _isEditMode = false; // ルーチン編集モード
 
-  final List<Map<String, dynamic>> _routines = [
-    {
-      'name': '胸の日',
-      'duration': '45 分',
-      'exercises': ['ベンチプレス', 'インクラインフライ', 'ケーブルクロス', 'ディップス', 'チェストプレス', 'フライ'],
-      'group': MuscleGroup.chest,
-    },
-    {
-      'name': '脚のパワー',
-      'duration': '60 分',
-      'exercises': ['スクワット', 'レッグプレス', 'カーフレイズ', 'レッグカール'],
-      'group': MuscleGroup.legs,
-    },
-    {
-      'name': '上半身スプリット',
-      'duration': '50 分',
-      'exercises': ['懸垂', 'ベントオーバーロウ', 'ラットプルダウン', 'ショルダープレス', 'アームカール', 'フェイスプル'],
-      'group': MuscleGroup.back,
-    },
-  ];
+  final List<Map<String, dynamic>> _routines = [];
 
   @override
   Widget build(BuildContext context) {

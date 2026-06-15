@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
+import '../utils/time_format.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import 'exercise_record_screen.dart';
 
@@ -38,11 +39,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
     }
   }
 
-  String get _dateLabel {
-    const weekdays = ['月', '火', '水', '木', '金', '土', '日'];
-    final w = weekdays[widget.date.weekday - 1];
-    return '${widget.date.month}月${widget.date.day}日($w)';
-  }
+  String get _dateLabel => formatJpDate(widget.date);
 
   @override
   Widget build(BuildContext context) {
@@ -236,8 +233,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
       (sum, ex) => sum + ex.sets.fold(0.0, (s, set) => s + set.weight * set.reps),
     );
     final duration = session.finishedAt?.difference(session.startedAt);
-    final startLabel =
-        '${session.startedAt.hour.toString().padLeft(2, '0')}:${session.startedAt.minute.toString().padLeft(2, '0')}';
+    final startLabel = formatHM(session.startedAt);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -373,7 +369,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
         MaterialPageRoute(
           builder: (_) => ExerciseRecordScreen(
             exercise: exercise,
-            isEditMode: true,
+            sessionId: session.id, // その日のセッションに保存
           ),
         ),
       ).then((_) => _loadSessions()), // 戻ったらDBリフレッシュ
@@ -500,13 +496,35 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => ExercisePickerSheet(
-        onSelected: (exercise) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ExerciseRecordScreen(exercise: exercise),
-            ),
-          ).then((_) => _loadSessions());
+        onSelected: (exercise) async {
+          // 当日の記録に同じ種目があれば編集モードで開く
+          final existing = _sessions
+              .expand((s) => s.exercises
+                  .where((e) => e.name == exercise.name)
+                  .map((ex) => (session: s, exercise: ex)))
+              .firstOrNull;
+
+          if (!context.mounted) return;
+
+          if (existing != null) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ExerciseRecordScreen(
+                  exercise: existing.exercise,
+                  sessionId: existing.session.id,
+                ),
+              ),
+            );
+          } else {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ExerciseRecordScreen(exercise: exercise),
+              ),
+            );
+          }
+          _loadSessions();
         },
       ),
     );

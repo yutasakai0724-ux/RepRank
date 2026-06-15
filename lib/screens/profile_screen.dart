@@ -1,8 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
+import '../services/auth_service.dart';
 import '../services/user_preferences.dart';
 import '../services/session_manager.dart';
+import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,6 +19,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _nameCtrl   = TextEditingController();
   final _weightCtrl = TextEditingController();
   String _gender = '男性';
+  bool _shareStats = false;
   bool _isLoading = true;
 
   @override
@@ -28,11 +33,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final name   = await prefs.getUsername();
     final weight = await prefs.getBodyWeight();
     final gender = await prefs.getGender();
+    final share  = await prefs.getShareStats();
     if (mounted) {
       setState(() {
         _nameCtrl.text   = name;
         _weightCtrl.text = weight.toStringAsFixed(1);
         _gender          = gender;
+        _shareStats      = share;
         _isLoading       = false;
       });
     }
@@ -65,6 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.setUsername(_nameCtrl.text.trim());
     await prefs.setBodyWeight(weight);
     await prefs.setGender(_gender);
+    await prefs.setShareStats(_shareStats);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -197,6 +205,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 24),
 
+                // ── アカウント ──
+                _sectionHeader('アカウント'),
+                const SizedBox(height: 12),
+                _buildAccountCard(),
+                const SizedBox(height: 24),
+
+                // ── プライバシー ──
+                _sectionHeader('プライバシー'),
+                const SizedBox(height: 12),
+                _buildPrivacyCard(),
+                const SizedBox(height: 8),
+                _buildPrivacyPolicyLink(),
+                const SizedBox(height: 24),
+
                 // ── 統計 ──
                 _sectionHeader('統計'),
                 const SizedBox(height: 12),
@@ -307,6 +329,248 @@ class _ProfileScreenState extends State<ProfileScreen> {
       title.toUpperCase(),
       style: GoogleFonts.jetBrainsMono(
           fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1.5),
+    );
+  }
+
+  Widget _buildAccountCard() {
+    return StreamBuilder<User?>(
+      stream: AuthService.instance.authStateChanges,
+      builder: (context, snap) {
+        final user = snap.data;
+        final isSignedIn = user != null && !(user.isAnonymous);
+
+        if (isSignedIn) {
+          // ログイン済み
+          return Container(
+            decoration: BoxDecoration(
+              color: kSurfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: kPrimary.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.check_circle,
+                            size: 20, color: kPrimary),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('同期中',
+                                style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: kPrimary)),
+                            const SizedBox(height: 2),
+                            Text(
+                              user.email ?? user.uid,
+                              style: GoogleFonts.inter(
+                                  fontSize: 12, color: kOnSurfaceVariant),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: kSurfaceContainerHigh),
+                InkWell(
+                  onTap: _signOut,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.logout,
+                            size: 18, color: kOnSurfaceVariant),
+                        const SizedBox(width: 12),
+                        Text('ログアウト',
+                            style: GoogleFonts.inter(
+                                fontSize: 14, color: kOnSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // 未ログイン
+        return GestureDetector(
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const AuthScreen())),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            decoration: BoxDecoration(
+              color: kSurfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: kSurfaceContainerHigh,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.cloud_upload_outlined,
+                      size: 20, color: kOnSurfaceVariant),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ログイン / アカウント作成',
+                          style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: kOnSurface)),
+                      const SizedBox(height: 2),
+                      Text('データをバックアップ・複数端末で同期',
+                          style: GoogleFonts.inter(
+                              fontSize: 11, color: kOnSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right,
+                    size: 20, color: kOnSurfaceVariant),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _signOut() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kSurfaceContainerLow,
+        title: Text('ログアウト',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: kOnSurface)),
+        content: Text('ログアウトしますか？\nデータはこの端末に保持されます。',
+            style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('キャンセル',
+                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('ログアウト',
+                style: GoogleFonts.inter(
+                    color: kPrimary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) await AuthService.instance.signOut();
+  }
+
+  Widget _buildPrivacyCard() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      decoration: BoxDecoration(
+        color: kSurfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '匿名統計データを共有',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: kOnSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'ヒストグラム機能の精度向上のため、種目名と体重比のみを匿名で送信します。個人を特定する情報は送信されません。',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: kOnSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Switch(
+            value: _shareStats,
+            onChanged: (v) => setState(() => _shareStats = v),
+            activeThumbColor: kPrimary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivacyPolicyLink() {
+    return GestureDetector(
+      onTap: () => launchUrl(
+        Uri.parse(
+            'https://yutasakai0724-ux.github.io/RepRank/privacy-policy.html'),
+        mode: LaunchMode.externalApplication,
+      ),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: kSurfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.privacy_tip_outlined,
+                size: 18, color: kOnSurfaceVariant),
+            const SizedBox(width: 12),
+            Text(
+              'プライバシーポリシー',
+              style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: kOnSurface),
+            ),
+            const Spacer(),
+            const Icon(Icons.open_in_new,
+                size: 14, color: kOnSurfaceVariant),
+          ],
+        ),
+      ),
     );
   }
 

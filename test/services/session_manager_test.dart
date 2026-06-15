@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kintorekioku/models/workout.dart';
-import 'package:kintorekioku/repositories/workout_repository.dart';
-import 'package:kintorekioku/services/session_manager.dart';
+import 'package:RepRank/models/workout.dart';
+import 'package:RepRank/repositories/workout_repository.dart';
+import 'package:RepRank/services/session_manager.dart';
 
 // ── インメモリ モックリポジトリ ───────────────────────────────────
 class _MockRepo implements WorkoutRepository {

@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.env.txt
+
+# Android 署名ファイル（絶対にコミットしない）
+android/key.properties
+android/app/*.jks
+android/app/*.keystore

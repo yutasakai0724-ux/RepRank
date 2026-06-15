@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../data/strength_standards.dart';
+import '../services/ad_service.dart';
 import '../services/session_manager.dart';
+import '../services/stopwatch_service.dart';
 import '../services/user_preferences.dart';
+import '../utils/time_format.dart';
 import 'exercise_analysis_screen.dart';
 
 class AnalysisScreen extends StatefulWidget {
@@ -14,16 +19,99 @@ class AnalysisScreen extends StatefulWidget {
   State<AnalysisScreen> createState() => _AnalysisScreenState();
 }
 
-class _AnalysisScreenState extends State<AnalysisScreen> {
+class _AnalysisScreenState extends State<AnalysisScreen>
+    with SingleTickerProviderStateMixin {
   double _bodyWeight = 70.0;
   List<WorkoutSession> _allSessions = [];
   bool _isLoading = true;
+
+  // ── ワークアウトストップウォッチ ──────────────────────
+  Timer? _stopwatchTimer;
+  Duration _elapsed = Duration.zero;
+  late final AnimationController _pulseController;
+
+  // ── リワード広告 ───────────────────────────────────────
+  RewardedAd? _rewardedAd;
+  bool _isAdLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _startStopwatchTick();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    _loadRewardedAd();
   }
+
+  @override
+  void dispose() {
+    _stopwatchTimer?.cancel();
+    _pulseController.dispose();
+    _rewardedAd?.dispose();
+    super.dispose();
+  }
+
+  void _loadRewardedAd() {
+    if (_isAdLoading) return;
+    setState(() => _isAdLoading = true);
+    AdService.instance.loadRewarded(
+      onLoaded: (ad) {
+        ad.fullScreenContentCallback = FullScreenContentCallback(
+          onAdDismissedFullScreenContent: (ad) {
+            ad.dispose();
+            setState(() {
+              _rewardedAd = null;
+              _isAdLoading = false;
+            });
+            _loadRewardedAd(); // 次の広告を事前ロード
+          },
+          onAdFailedToShowFullScreenContent: (ad, error) {
+            ad.dispose();
+            setState(() {
+              _rewardedAd = null;
+              _isAdLoading = false;
+            });
+          },
+        );
+        if (mounted) {
+          setState(() {
+            _rewardedAd = ad;
+            _isAdLoading = false;
+          });
+        }
+      },
+      onFailed: (_) {
+        if (mounted) setState(() => _isAdLoading = false);
+      },
+    );
+  }
+
+  void _showRewardedAd() {
+    _rewardedAd?.show(
+      onUserEarnedReward: (_, reward) {
+        // リワードなし（応援のみ）
+      },
+    );
+  }
+
+  void _startStopwatchTick() {
+    _updateElapsed();
+    _stopwatchTimer?.cancel();
+    _stopwatchTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateElapsed();
+    });
+  }
+
+  void _updateElapsed() {
+    if (!mounted) return;
+    setState(() {
+      _elapsed = StopwatchService.instance.elapsed;
+    });
+  }
+
 
   Future<void> _loadData() async {
     final sessions = await SessionManager.instance.getAllSessions();
@@ -184,46 +272,247 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: kPrimary))
-          : summaries.isEmpty
-          ? _buildEmptyState()
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               children: [
-                _buildOverallCard(summaries),
+                _buildWorkoutStopwatchCard(),
                 const SizedBox(height: 16),
-                _buildMuscleCoverage(),
-                const SizedBox(height: 16),
-                if (_closestToNextLevel != null) ...[
-                  _buildNextMilestoneCard(_closestToNextLevel!),
+                if (summaries.isEmpty)
+                  _buildEmptyInline()
+                else ...[
+                  _buildOverallCard(summaries),
                   const SizedBox(height: 16),
+                  _buildMuscleCoverage(),
+                  const SizedBox(height: 16),
+                  if (_closestToNextLevel != null) ...[
+                    _buildNextMilestoneCard(_closestToNextLevel!),
+                    const SizedBox(height: 16),
+                  ],
+                  _buildSectionHeader('種目別ベスト'),
+                  const SizedBox(height: 10),
+                  _buildExerciseGrid(summaries),
                 ],
-                _buildSectionHeader('種目別ベスト'),
-                const SizedBox(height: 10),
-                _buildExerciseGrid(summaries),
+                const SizedBox(height: 24),
+                _buildSupportAdButton(),
+                const SizedBox(height: 8),
               ],
             ),
     );
   }
 
-  // ── 空状態 ────────────────────────────────────────────────────
-  Widget _buildEmptyState() {
-    return Center(
+  // ── ワークアウトストップウォッチカード（単純な START/STOP/RESET） ─
+  // Stitch design: 17765783634350002168 / ebfe1322ae884b6ab25aa263c47a4622
+  Widget _buildWorkoutStopwatchCard() {
+    final svc = StopwatchService.instance;
+    final isRunning = svc.isRunning;
+
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final glow = 0.10 + 0.10 * _pulseController.value;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kPrimaryLight.withValues(alpha: 0.10),
+                Colors.transparent,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: kPrimaryLight.withValues(alpha: 0.25),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: kPrimaryLight.withValues(alpha: glow),
+                blurRadius: 24,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: child!,
+        );
+      },
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ヘッダー
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FadeTransition(
+                opacity: Tween<double>(begin: 0.4, end: 1.0)
+                    .animate(_pulseController),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: kPrimaryLight,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'ストップウォッチ',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: kPrimaryLight,
+                  letterSpacing: 2.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          // 経過時間（64px 大画面表示）
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              formatHMS(_elapsed),
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 64,
+                fontWeight: FontWeight.w800,
+                color: kPrimaryLight,
+                letterSpacing: -1,
+                height: 1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '経過時間',
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10,
+              color: kOnSurfaceVariant,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          // 操作ボタン: START / STOP / RESET
+          Row(
+            children: [
+              Expanded(
+                child: _actionButton(
+                  icon: Icons.play_arrow,
+                  label: 'START',
+                  bgColor: isRunning ? kSurfaceContainerHigh : kPrimary,
+                  fgColor: isRunning ? kOnSurfaceVariant : Colors.white,
+                  disabled: isRunning,
+                  onTap: () {
+                    StopwatchService.instance.start();
+                    _updateElapsed();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _actionButton(
+                  icon: Icons.pause,
+                  label: 'STOP',
+                  bgColor: isRunning ? kSurfaceContainerHigh : kSurfaceContainerHigh,
+                  fgColor: isRunning ? kPrimaryLight : kOnSurfaceVariant,
+                  borderColor: isRunning
+                      ? kPrimaryLight.withValues(alpha: 0.5)
+                      : null,
+                  disabled: !isRunning,
+                  onTap: () {
+                    StopwatchService.instance.stop();
+                    _updateElapsed();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _actionButton(
+                  icon: Icons.refresh,
+                  label: 'RESET',
+                  bgColor: kSurfaceContainerHigh,
+                  fgColor: kOnSurfaceVariant,
+                  onTap: () {
+                    StopwatchService.instance.reset();
+                    _updateElapsed();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required Color bgColor,
+    required Color fgColor,
+    required VoidCallback onTap,
+    Color? borderColor,
+    bool disabled = false,
+  }) {
+    return Opacity(
+      opacity: disabled ? 0.4 : 1.0,
+      child: GestureDetector(
+        onTap: disabled ? null : onTap,
+        child: Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: borderColor != null
+                ? Border.all(color: borderColor, width: 1)
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: fgColor, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: fgColor,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyInline() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Column(
         children: [
           Icon(Icons.analytics_outlined,
-              size: 64, color: kOnSurfaceVariant.withValues(alpha: 0.2)),
-          const SizedBox(height: 16),
-          Text('まだデータがありません',
-              style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: kOnSurfaceVariant)),
-          const SizedBox(height: 8),
-          Text('トレーニングを記録すると\n分析結果がここに表示されます',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                  fontSize: 13, color: kOnSurfaceVariant.withValues(alpha: 0.6))),
+              size: 56, color: kOnSurfaceVariant.withValues(alpha: 0.2)),
+          const SizedBox(height: 14),
+          Text(
+            'まだデータがありません',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kOnSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '＋ボタンからトレーニングを開始',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: kOnSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
         ],
       ),
     );
@@ -592,6 +881,49 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                   ],
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── 広告応援ボタン ──────────────────────────────────────────────
+
+  Widget _buildSupportAdButton() {
+    final isReady = _rewardedAd != null;
+    return GestureDetector(
+      onTap: isReady ? _showRewardedAd : null,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isReady
+              ? kPrimary.withValues(alpha: 0.1)
+              : kSurfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isReady
+                ? kPrimary.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.06),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.volunteer_activism_outlined,
+              size: 18,
+              color: isReady ? kPrimary : kOnSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isReady ? '広告を見て応援する' : '広告を準備中...',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isReady ? kPrimary : kOnSurfaceVariant,
+              ),
             ),
           ],
         ),

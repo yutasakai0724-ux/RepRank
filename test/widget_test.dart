@@ -2,7 +2,7 @@
 // ここではスモークテストとして main.dart が import できることのみ検証する。
 // 実質的なロジックテストは test/models/ と test/services/ を参照。
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kintorekioku/models/workout.dart';
+import 'package:RepRank/models/workout.dart';
 
 void main() {
   test('defaultExercises list is not empty', () {

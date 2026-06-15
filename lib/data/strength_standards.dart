@@ -116,3 +116,7 @@ StrengthResult evaluate({
     exerciseName: exerciseName,
   );
 }
+
+/// ExRx データベースに基準値が存在する種目かどうか
+bool hasExrxData(String exerciseName) =>
+    _exrxStandards.containsKey(exerciseName);

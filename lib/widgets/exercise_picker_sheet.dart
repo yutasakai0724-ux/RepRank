@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
+import '../services/user_preferences.dart';
 
 /// 部位別アコーディオン形式の種目選択ボトムシート。
 /// showModalBottomSheet の builder に直接渡して使う。
@@ -39,6 +40,14 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   void initState() {
     super.initState();
     _exercises = List.from(defaultExercises);
+    _loadCustomExercises();
+  }
+
+  Future<void> _loadCustomExercises() async {
+    final custom = await UserPreferences.instance.getCustomExercises();
+    if (custom.isNotEmpty && mounted) {
+      setState(() => _exercises.addAll(custom));
+    }
   }
 
   void _showAddExerciseDialog() {
@@ -103,6 +112,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 if (name.isNotEmpty) {
                   setState(() =>
                       _exercises.add({'name': name, 'group': selectedGroup}));
+                  UserPreferences.instance.addCustomExercise(name, selectedGroup);
                   Navigator.pop(ctx);
                 }
               },
@@ -203,14 +213,14 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
       initialChildSize: 0.75,
       minChildSize: 0.4,
       maxChildSize: 0.92,
-      builder: (_, ctrl) => Container(
-        decoration: BoxDecoration(
-          color: kSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-          ),
+      builder: (_, ctrl) => Material(
+        color: kSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(20)),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           children: [
             Container(

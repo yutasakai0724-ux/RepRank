@@ -6,6 +6,7 @@ import '../models/workout.dart';
 import '../data/strength_standards.dart';
 import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
+import '../utils/time_format.dart';
 
 class ExerciseAnalysisScreen extends StatefulWidget {
   final Exercise exercise;
@@ -49,8 +50,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     final sessions = await SessionManager.instance.getAllSessions();
     final Map<String, double> byDate = {};
     for (final s in sessions) {
-      final dateKey =
-          '${s.date.year}-${s.date.month.toString().padLeft(2, '0')}-${s.date.day.toString().padLeft(2, '0')}';
+      final dateKey = formatYMD(s.date);
       for (final ex in s.exercises) {
         if (ex.name != widget.exercise.name) continue;
         if (ex.sets.isEmpty) continue;
@@ -198,6 +198,8 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           _buildNextGoalCard(),
           const SizedBox(height: 16),
           _buildThresholdTable(),
+          const SizedBox(height: 16),
+          _buildHistogram(),
           const SizedBox(height: 16),
           _buildHistoryChart(),
           const SizedBox(height: 40),
@@ -605,6 +607,70 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             );
           }),
         ],
+      ),
+    );
+  }
+
+  // ── 強度基準ヒストグラム ────────────────────────────────────────
+  Widget _buildHistogram() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        color: kSurfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '強度分布ヒストグラム',
+            style: GoogleFonts.jetBrainsMono(
+                fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'ユーザーデータによる体重比分布',
+            style: GoogleFonts.jetBrainsMono(
+                fontSize: 9,
+                color: kOnSurfaceVariant.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 16),
+          _buildComingSoon(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComingSoon() {
+    return SizedBox(
+      height: 120,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bar_chart_rounded,
+                size: 28,
+                color: kOnSurfaceVariant.withValues(alpha: 0.2)),
+            const SizedBox(height: 10),
+            Text(
+              'Coming Soon',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: kOnSurfaceVariant.withValues(alpha: 0.4),
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'ユーザーデータ収集後に公開予定',
+              style: GoogleFonts.jetBrainsMono(
+                  fontSize: 9,
+                  color: kOnSurfaceVariant.withValues(alpha: 0.28)),
+            ),
+          ],
+        ),
       ),
     );
   }

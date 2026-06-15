@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
+import '../utils/time_format.dart';
 import 'daily_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -500,8 +501,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _sessionCard(WorkoutSession session) {
     final volume = session.totalVolume;
     final duration = session.finishedAt?.difference(session.startedAt);
-    final h = session.startedAt.hour.toString().padLeft(2, '0');
-    final m = session.startedAt.minute.toString().padLeft(2, '0');
+    final startLabel = formatHM(session.startedAt);
     final hasRoutine = session.routineName != null;
     final iconColor = hasRoutine ? kPrimary : kTertiary;
     final exerciseNames =
@@ -548,7 +548,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             color: kOnSurface),
                       ),
                       Text(
-                        '$h:$m',
+                        startLabel,
                         style: GoogleFonts.jetBrainsMono(
                             fontSize: 10, color: kOnSurfaceVariant),
                       ),

@@ -161,7 +161,7 @@ git add .
 git commit -m "Initial commit"
 
 # リモートリポジトリを追加（あなたのGitHubユーザー名に変更）
-git remote add origin https://github.com/あなたのGitHubユーザー名/reprank.git
+git remote add origin https://github.com/yutasakai0724-ux/reprank.git
 
 # プッシュ
 git branch -M main

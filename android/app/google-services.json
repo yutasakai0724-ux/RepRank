@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "960167971414",
+    "project_id": "rep-rank-f96dd",
+    "storage_bucket": "rep-rank-f96dd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:960167971414:android:3b00138ef77037ad8009f7",
+        "android_client_info": {
+          "package_name": "com.yutasakai.reprank"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "960167971414-rogmbb1f105d7su3osrufor6oe5ilfag.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2oEad2l_CyYLLGcglmk4xRYecvXFThLs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "960167971414-rogmbb1f105d7su3osrufor6oe5ilfag.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "960167971414-v6cdknd81mq1mcr8olsnb9stmqqnlrjn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.yutasakai.reprank"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

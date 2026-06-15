@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kintorekioku/models/workout.dart';
+import 'package:RepRank/models/workout.dart';
 
 void main() {
   // ── WorkoutSet ──────────────────────────────────────────────────
