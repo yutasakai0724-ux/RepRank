@@ -163,7 +163,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   Future<void> _showDurationPicker() async {
     final result = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: kSurfaceContainerLow,
+      backgroundColor: context.cCardLow,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -251,7 +251,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         if (!didPop) _saveAndPop();
       },
       child: Scaffold(
-        backgroundColor: kBackground,
+        backgroundColor: context.cBg,
         appBar: _buildAppBar(),
         body: Column(
           children: [
@@ -274,10 +274,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: kSurface.withValues(alpha: 0.85),
+      backgroundColor: context.cBg.withValues(alpha: 0.85),
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: kOnSurface),
+        icon: Icon(Icons.arrow_back, color: context.cText),
         onPressed: _saveAndPop,
       ),
       title: Column(
@@ -296,7 +296,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             widget.exercise.muscleGroup.label,
             style: GoogleFonts.jetBrainsMono(
               fontSize: 10,
-              color: kOnSurfaceVariant,
+              color: context.cTextSub,
             ),
           ),
         ],
@@ -311,7 +311,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   Widget _buildSaveIndicator() {
     final (icon, color, label) = switch (_saveStatus) {
-      'saving' => (Icons.sync, kOnSurfaceVariant, '保存中'),
+      'saving' => (Icons.sync, context.cTextSub, '保存中'),
       'saved' => (Icons.cloud_done_outlined, kTertiary, '保存済'),
       _ => (Icons.edit_outlined, kPrimary, '未保存'),
     };
@@ -378,7 +378,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -391,7 +391,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                   '前回のベスト',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 9,
-                    color: kOnSurfaceVariant,
+                    color: context.cTextSub,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -404,7 +404,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color:
-                        _prevBestSet != null ? kPrimaryLight : kOnSurfaceVariant,
+                        _prevBestSet != null ? kPrimaryLight : context.cTextSub,
                   ),
                 ),
               ],
@@ -418,7 +418,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                   '現在の最大1RM',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 9,
-                    color: kOnSurfaceVariant,
+                    color: context.cTextSub,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -456,7 +456,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                     size: 20,
                     color: _currentMaxRM > 0
                         ? kPrimary
-                        : kOnSurfaceVariant.withValues(alpha: 0.3),
+                        : context.cTextSub.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -465,7 +465,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                       fontSize: 9,
                       color: _currentMaxRM > 0
                           ? kPrimary
-                          : kOnSurfaceVariant.withValues(alpha: 0.3),
+                          : context.cTextSub.withValues(alpha: 0.3),
                     ),
                   ),
                 ],
@@ -497,7 +497,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       decoration: BoxDecoration(
         color: isFinished
             ? kTertiary.withValues(alpha: 0.12)
-            : kSurfaceContainerLow,
+            : context.cCardLow,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor, width: isFinished ? 1.5 : 1),
       ),
@@ -513,7 +513,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 ? kTertiary
                 : (isRunning || isPaused)
                     ? kSecondary
-                    : kOnSurfaceVariant,
+                    : context.cTextSub,
             size: 18,
           ),
           const SizedBox(width: 8),
@@ -532,7 +532,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         style: GoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: kOnSurface,
+          color: context.cText,
         ),
       ),
       const SizedBox(width: 10),
@@ -542,7 +542,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           padding:
               const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: kSurfaceContainerHigh,
+            color: context.cCardHigh,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -553,12 +553,12 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: kOnSurface,
+                  color: context.cText,
                 ),
               ),
               const SizedBox(width: 2),
-              const Icon(Icons.expand_more,
-                  size: 14, color: kOnSurfaceVariant),
+              Icon(Icons.expand_more,
+                  size: 14, color: context.cTextSub),
             ],
           ),
         ),
@@ -602,7 +602,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         style: GoogleFonts.jetBrainsMono(
           fontSize: 22,
           fontWeight: FontWeight.w800,
-          color: isPaused ? kOnSurfaceVariant : kSecondary,
+          color: isPaused ? context.cTextSub : kSecondary,
           letterSpacing: 1,
         ),
       ),
@@ -611,7 +611,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         isPaused ? '一時停止' : '休憩中',
         style: GoogleFonts.jetBrainsMono(
           fontSize: 9,
-          color: kOnSurfaceVariant,
+          color: context.cTextSub,
           letterSpacing: 1,
         ),
       ),
@@ -623,12 +623,12 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           height: 34,
           margin: const EdgeInsets.only(right: 6),
           decoration: BoxDecoration(
-            color: kSurfaceContainerHigh,
+            color: context.cCardHigh,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             isPaused ? Icons.play_arrow : Icons.pause,
-            color: kOnSurface,
+            color: context.cText,
             size: 18,
           ),
         ),
@@ -639,10 +639,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: kSurfaceContainerHigh,
+            color: context.cCardHigh,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.stop, color: kOnSurface, size: 18),
+          child: Icon(Icons.stop, color: context.cText, size: 18),
         ),
       ),
     ];
@@ -691,7 +691,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             width: 28,
             child: Text('SET',
                 style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9, color: kOnSurfaceVariant, letterSpacing: 1)),
+                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -699,7 +699,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             child: Text('重量',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9, color: kOnSurfaceVariant, letterSpacing: 1)),
+                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -707,7 +707,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             child: Text('回数',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9, color: kOnSurfaceVariant, letterSpacing: 1)),
+                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -715,7 +715,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             child: Text('1RM推定',
                 textAlign: TextAlign.right,
                 style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9, color: kOnSurfaceVariant, letterSpacing: 1)),
+                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 28),
         ],
@@ -729,7 +729,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -824,7 +824,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 });
                 _triggerSave();
               },
-              icon: const Icon(Icons.close, color: kOutline),
+              icon: Icon(Icons.close, color: context.cBorder),
             ),
           ),
         ],
@@ -848,7 +848,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       decoration: InputDecoration(
         filled: true,
-        fillColor: kSurfaceHighest.withValues(alpha: 0.5),
+        fillColor: context.cCardTop.withValues(alpha: 0.5),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
@@ -884,19 +884,19 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 decoration: BoxDecoration(
                   color: Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kOutlineVariant, width: 1),
+                  border: Border.all(color: context.cBorderSub, width: 1),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.add, color: kOnSurfaceVariant, size: 18),
+                    Icon(Icons.add, color: context.cTextSub, size: 18),
                     const SizedBox(width: 6),
                     Text(
                       'セットを追加',
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: kOnSurfaceVariant,
+                        color: context.cTextSub,
                       ),
                     ),
                   ],
@@ -1025,7 +1025,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: kSurfaceContainerHigh,
+        color: context.cCardHigh,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -1037,7 +1037,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               '記録済み: ${session.exercises.map((e) => e.name).join(' · ')}',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 10,
-                color: kOnSurfaceVariant,
+                color: context.cTextSub,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

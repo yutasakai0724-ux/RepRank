@@ -85,23 +85,23 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('体重を設定',
             style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: kOnSurface)),
+                fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.inter(color: kOnSurface),
+          style: GoogleFonts.inter(color: context.cText),
           decoration: InputDecoration(
             suffixText: 'kg',
-            suffixStyle: GoogleFonts.jetBrainsMono(color: kOnSurfaceVariant),
+            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: kOutlineVariant)),
+                borderSide: BorderSide(color: context.cBorderSub)),
             focusedBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: kPrimary)),
           ),
@@ -110,7 +110,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                style: GoogleFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () async {
@@ -138,12 +138,12 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface.withValues(alpha: 0.85),
+        backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: kOnSurface),
+          icon: Icon(Icons.arrow_back, color: context.cText),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -161,7 +161,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             Text(
               '強度分析',
               style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10, color: kOnSurfaceVariant),
+                  fontSize: 10, color: context.cTextSub),
             ),
           ],
         ),
@@ -179,12 +179,12 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     style: GoogleFonts.jetBrainsMono(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: kOnSurface),
+                        color: context.cText),
                   ),
                   Text(
                     '体重 ✎',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9, color: kOnSurfaceVariant),
+                        fontSize: 9, color: context.cTextSub),
                   ),
                 ],
               ),
@@ -218,7 +218,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: tier.color.withValues(alpha: 0.25)),
@@ -233,7 +233,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   '現在の推定1RM',
                   style: GoogleFonts.jetBrainsMono(
                       fontSize: 10,
-                      color: kOnSurfaceVariant,
+                      color: context.cTextSub,
                       letterSpacing: 1),
                 ),
                 const SizedBox(height: 6),
@@ -245,7 +245,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 48,
                         fontWeight: FontWeight.w900,
-                        color: kOnSurface,
+                        color: context.cText,
                         letterSpacing: -2,
                         height: 1,
                       ),
@@ -256,7 +256,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       child: Text(
                         'kg',
                         style: GoogleFonts.jetBrainsMono(
-                            fontSize: 16, color: kOnSurfaceVariant),
+                            fontSize: 16, color: context.cTextSub),
                       ),
                     ),
                   ],
@@ -265,7 +265,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 Text(
                   '体重比 ${(_result.oneRM / _bodyWeight).toStringAsFixed(2)}x',
                   style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11, color: kOnSurfaceVariant),
+                      fontSize: 11, color: context.cTextSub),
                 ),
               ],
             ),
@@ -304,7 +304,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -314,7 +314,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           Text(
             'レベル進捗',
             style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1),
+                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 14),
           // セグメントバー
@@ -329,7 +329,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   decoration: BoxDecoration(
                     color: isActive
                         ? t.color.withValues(alpha: isCurrent ? 1.0 : 0.5)
-                        : kSurfaceContainerHigh,
+                        : context.cCardHigh,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -350,7 +350,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     fontWeight: isCurrent
                         ? FontWeight.w700
                         : FontWeight.w400,
-                    color: isCurrent ? t.color : kOnSurfaceVariant,
+                    color: isCurrent ? t.color : context.cTextSub,
                   ),
                 ),
               );
@@ -365,7 +365,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 Text(
                   '${_result.tier.label} 内の進捗',
                   style: GoogleFonts.jetBrainsMono(
-                      fontSize: 10, color: kOnSurfaceVariant),
+                      fontSize: 10, color: context.cTextSub),
                 ),
                 Text(
                   '${(_result.progressInTier * 100).toStringAsFixed(0)}%',
@@ -383,7 +383,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               child: LinearProgressIndicator(
                 value: _result.progressInTier,
                 minHeight: 6,
-                backgroundColor: kSurfaceContainerHigh,
+                backgroundColor: context.cCardHigh,
                 valueColor:
                     AlwaysStoppedAnimation(_result.tier.color),
               ),
@@ -426,7 +426,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   Text(
                     '最高ランクに到達しています',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: kOnSurfaceVariant),
+                        fontSize: 11, color: context.cTextSub),
                   ),
                 ],
               ),
@@ -443,7 +443,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: nextTier.color.withValues(alpha: 0.2)),
@@ -469,7 +469,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   '次の目標：${nextTier.label}',
                   style: GoogleFonts.jetBrainsMono(
                       fontSize: 10,
-                      color: kOnSurfaceVariant,
+                      color: context.cTextSub,
                       letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 4),
@@ -491,7 +491,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       child: Text('kg',
                           style: GoogleFonts.jetBrainsMono(
                               fontSize: 13,
-                              color: kOnSurfaceVariant)),
+                              color: context.cTextSub)),
                     ),
                   ],
                 ),
@@ -517,7 +517,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 ),
                 Text('kg 必要',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9, color: kOnSurfaceVariant)),
+                        fontSize: 9, color: context.cTextSub)),
               ],
             ),
           ),
@@ -531,7 +531,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -541,7 +541,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           Text(
             'レベル別基準（体重 ${_bodyWeight.toStringAsFixed(0)}kg）',
             style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1),
+                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 12),
           ...StrengthTier.values.asMap().entries.map((entry) {
@@ -567,7 +567,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Icon(_tierIcon(t),
                       size: 16,
-                      color: isCurrent ? t.color : kOnSurfaceVariant),
+                      color: isCurrent ? t.color : context.cTextSub),
                   const SizedBox(width: 10),
                   Text(
                     t.label,
@@ -575,7 +575,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
-                      color: isCurrent ? t.color : kOnSurfaceVariant,
+                      color: isCurrent ? t.color : context.cTextSub,
                     ),
                   ),
                   const Spacer(),
@@ -585,7 +585,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
-                      color: isCurrent ? t.color : kOnSurfaceVariant,
+                      color: isCurrent ? t.color : context.cTextSub,
                     ),
                   ),
                   if (isCurrent) ...[
@@ -620,7 +620,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -630,14 +630,14 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           Text(
             '強度分布ヒストグラム',
             style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1),
+                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 4),
           Text(
             'ユーザーデータによる体重比分布',
             style: GoogleFonts.jetBrainsMono(
                 fontSize: 9,
-                color: kOnSurfaceVariant.withValues(alpha: 0.5)),
+                color: context.cTextSub.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: 16),
           _buildComingSoon(),
@@ -655,14 +655,14 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           children: [
             Icon(Icons.bar_chart_rounded,
                 size: 28,
-                color: kOnSurfaceVariant.withValues(alpha: 0.2)),
+                color: context.cTextSub.withValues(alpha: 0.2)),
             const SizedBox(height: 10),
             Text(
               'Coming Soon',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: kOnSurfaceVariant.withValues(alpha: 0.4),
+                color: context.cTextSub.withValues(alpha: 0.4),
                 letterSpacing: 1.5,
               ),
             ),
@@ -671,7 +671,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               'ユーザーデータ収集後に公開予定',
               style: GoogleFonts.jetBrainsMono(
                   fontSize: 9,
-                  color: kOnSurfaceVariant.withValues(alpha: 0.28)),
+                  color: context.cTextSub.withValues(alpha: 0.28)),
             ),
           ],
         ),
@@ -684,7 +684,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -694,7 +694,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           Text(
             '1RM 推移',
             style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1),
+                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 16),
           if (_history.length < 2)
@@ -706,14 +706,14 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Icon(Icons.show_chart,
                       size: 32,
-                      color: kOnSurfaceVariant.withValues(alpha: 0.3)),
+                      color: context.cTextSub.withValues(alpha: 0.3)),
                   const SizedBox(height: 8),
                   Text(
                     _history.isEmpty
                         ? 'データが蓄積されるとグラフが表示されます'
                         : 'あと ${2 - _history.length} 回記録するとグラフが表示されます',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: kOnSurfaceVariant),
+                        fontSize: 11, color: context.cTextSub),
                   ),
                 ],
               ),
@@ -762,7 +762,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 getTitlesWidget: (v, _) => Text(
                   '${v.toInt()}',
                   style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9, color: kOnSurfaceVariant),
+                      fontSize: 9, color: context.cTextSub),
                 ),
               ),
             ),
@@ -785,7 +785,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     child: Text(
                       label,
                       style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9, color: kOnSurfaceVariant),
+                          fontSize: 9, color: context.cTextSub),
                     ),
                   );
                 },
@@ -809,7 +809,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   radius: 4,
                   color: kPrimary,
                   strokeWidth: 2,
-                  strokeColor: kSurfaceContainerLow,
+                  strokeColor: context.cCardLow,
                 ),
               ),
               belowBarData: BarAreaData(
@@ -827,7 +827,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           ],
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => kSurfaceContainerHigh,
+              getTooltipColor: (_) => context.cCardHigh,
               getTooltipItems: (spots) => spots
                   .map((s) => LineTooltipItem(
                         '${s.y.toStringAsFixed(1)}kg',

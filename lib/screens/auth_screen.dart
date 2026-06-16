@@ -79,9 +79,9 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface,
+        backgroundColor: context.cBg,
         elevation: 0,
         title: Text(
           _isLogin ? 'ログイン' : 'アカウント作成',
@@ -124,7 +124,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   'ログインするとデータをクラウドに\nバックアップ・同期できます',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
-                      fontSize: 13, color: kOnSurfaceVariant, height: 1.5),
+                      fontSize: 13, color: context.cTextSub, height: 1.5),
                 ),
               ),
               const SizedBox(height: 32),
@@ -147,14 +147,14 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 24),
               Row(children: [
-                const Expanded(child: Divider(color: kSurfaceContainerHigh)),
+                Expanded(child: Divider(color: context.cCardHigh)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text('または',
                       style: GoogleFonts.inter(
-                          fontSize: 12, color: kOnSurfaceVariant)),
+                          fontSize: 12, color: context.cTextSub)),
                 ),
-                const Expanded(child: Divider(color: kSurfaceContainerHigh)),
+                Expanded(child: Divider(color: context.cCardHigh)),
               ]),
               const SizedBox(height: 24),
 
@@ -173,7 +173,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   icon: Icon(
                       _obscure ? Icons.visibility_off : Icons.visibility,
                       size: 20,
-                      color: kOnSurfaceVariant),
+                      color: context.cTextSub),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
               ),
@@ -249,7 +249,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   Text(
                     _isLogin ? 'アカウントをお持ちでない方は' : 'すでにアカウントをお持ちの方は',
                     style: GoogleFonts.inter(
-                        fontSize: 13, color: kOnSurfaceVariant),
+                        fontSize: 13, color: context.cTextSub),
                   ),
                   GestureDetector(
                     onTap: () => setState(() {
@@ -316,13 +316,13 @@ class _AuthScreenState extends State<AuthScreen> {
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscure,
-      style: GoogleFonts.inter(fontSize: 14, color: kOnSurface),
+      style: GoogleFonts.inter(fontSize: 14, color: context.cText),
       decoration: InputDecoration(
         labelText: label,
         labelStyle:
-            GoogleFonts.inter(fontSize: 13, color: kOnSurfaceVariant),
+            GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
         filled: true,
-        fillColor: kSurfaceContainerLow,
+        fillColor: context.cCardLow,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
@@ -345,25 +345,25 @@ class _AuthScreenState extends State<AuthScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         title: Text('パスワードリセット',
             style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: kOnSurface)),
+                fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.emailAddress,
-          style: GoogleFonts.inter(color: kOnSurface),
+          style: GoogleFonts.inter(color: context.cText),
           decoration: InputDecoration(
             labelText: 'メールアドレス',
             labelStyle:
-                GoogleFonts.inter(color: kOnSurfaceVariant),
+                GoogleFonts.inter(color: context.cTextSub),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                style: GoogleFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () async {
@@ -378,7 +378,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   SnackBar(
                     content: Text('リセットメールを送信しました',
                         style: GoogleFonts.inter(color: Colors.white)),
-                    backgroundColor: kSurfaceContainerHigh,
+                    backgroundColor: context.cCardHigh,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );

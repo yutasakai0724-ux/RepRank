@@ -21,9 +21,9 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface.withValues(alpha: 0.85),
+        backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         title: Text(
           'ROUTINES',
@@ -55,7 +55,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(99),
                     border: Border.all(
-                      color: _isEditMode ? kPrimary : kOutlineVariant,
+                      color: _isEditMode ? kPrimary : context.cBorderSub,
                     ),
                   ),
                   child: Row(
@@ -66,7 +66,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                             ? Icons.check
                             : Icons.manage_accounts_outlined,
                         size: 14,
-                        color: _isEditMode ? kPrimary : kOnSurfaceVariant,
+                        color: _isEditMode ? kPrimary : context.cTextSub,
                       ),
                       const SizedBox(width: 5),
                       Text(
@@ -74,7 +74,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                         style: GoogleFonts.inter(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: _isEditMode ? kPrimary : kOnSurfaceVariant,
+                          color: _isEditMode ? kPrimary : context.cTextSub,
                         ),
                       ),
                     ],
@@ -103,7 +103,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -136,7 +136,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
             style: GoogleFonts.jetBrainsMono(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: active ? kPrimary : kOnSurfaceVariant,
+              color: active ? kPrimary : context.cTextSub,
             ),
           ),
         ),
@@ -150,11 +150,11 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _isEditMode
-              ? kOutlineVariant.withValues(alpha: 0.4)
+              ? context.cBorderSub.withValues(alpha: 0.4)
               : Colors.white.withValues(alpha: 0.06),
         ),
       ),
@@ -184,7 +184,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                       padding: const EdgeInsets.only(top: 2, right: 10),
                       child: Icon(Icons.drag_handle,
                           size: 18,
-                          color: kOnSurfaceVariant.withValues(alpha: 0.5)),
+                          color: context.cTextSub.withValues(alpha: 0.5)),
                     ),
                   ],
                   Expanded(
@@ -196,7 +196,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: kOnSurface,
+                            color: context.cText,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -204,7 +204,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                           '${(routine['exercises'] as List).length} 種目 • ${routine['duration']}',
                           style: GoogleFonts.jetBrainsMono(
                             fontSize: 10,
-                            color: kOnSurfaceVariant,
+                            color: context.cTextSub,
                           ),
                         ),
                       ],
@@ -230,10 +230,10 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                   else
                     GestureDetector(
                       onTap: () {},
-                      child: const Padding(
+                      child: Padding(
                         padding: EdgeInsets.only(left: 4),
                         child: Icon(Icons.more_horiz,
-                            size: 20, color: kOnSurfaceVariant),
+                            size: 20, color: context.cTextSub),
                       ),
                     ),
                 ],
@@ -249,14 +249,14 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: kSurfaceContainerHigh,
+                      color: context.cCardHigh,
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(
                       ex,
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 10,
-                        color: kOnSurfaceVariant,
+                        color: context.cTextSub,
                       ),
                     ),
                   );
@@ -318,24 +318,24 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '新しいルーチン',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w700,
-            color: kOnSurface,
+            color: context.cText,
           ),
         ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: GoogleFonts.inter(color: kOnSurface),
+          style: GoogleFonts.inter(color: context.cText),
           decoration: InputDecoration(
             hintText: 'ルーチン名を入力',
-            hintStyle: GoogleFonts.inter(color: kOnSurfaceVariant),
+            hintStyle: GoogleFonts.inter(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: kOutlineVariant),
+              borderSide: BorderSide(color: context.cBorderSub),
             ),
             focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: kPrimary),
@@ -346,7 +346,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                style: GoogleFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () {
@@ -389,13 +389,13 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.add_circle_outline,
-                size: 22, color: kOnSurfaceVariant.withValues(alpha: 0.4)),
+                size: 22, color: context.cTextSub.withValues(alpha: 0.4)),
             const SizedBox(width: 8),
             Text(
               '新しいルーチンを作成',
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: kOnSurfaceVariant.withValues(alpha: 0.4),
+                color: context.cTextSub.withValues(alpha: 0.4),
               ),
             ),
           ],
@@ -422,7 +422,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: kSurfaceContainerLow,
+          color: context.cCardLow,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
@@ -437,7 +437,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: kOnSurface,
+                      color: context.cText,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -445,21 +445,21 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: kSurfaceContainerHigh,
+                      color: context.cCardHigh,
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(
                       (e['group'] as MuscleGroup).label,
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 10,
-                        color: kOnSurfaceVariant,
+                        color: context.cTextSub,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: kOutline, size: 18),
+            Icon(Icons.chevron_right, color: context.cBorder, size: 18),
           ],
         ),
       ),

@@ -190,7 +190,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
   Widget _buildBottomBar() {
     return BottomAppBar(
-      color: kSurfaceContainer,
+      color: context.cCard,
       elevation: 0,
       notchMargin: 6,
       shape: const CircularNotchedRectangle(),
@@ -222,14 +222,14 @@ class _MainNavigationState extends State<MainNavigation> {
           children: [
             Icon(active ? activeIcon : icon,
                 size: 22,
-                color: active ? kPrimary : kOnSurfaceVariant),
+                color: active ? kPrimary : context.cTextSub),
             const SizedBox(height: 2),
             Text(label,
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight:
                       active ? FontWeight.w600 : FontWeight.w400,
-                  color: active ? kPrimary : kOnSurfaceVariant,
+                  color: active ? kPrimary : context.cTextSub,
                 )),
           ],
         ),

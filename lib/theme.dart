@@ -30,10 +30,26 @@ const Color kOutline             = Color(0xFFA98A7D); // Borders
 const Color kOutlineVariant      = Color(0xFF5A4136); // Subtle borders
 
 // ── ライトモード用カラー ──────────────────────────
-const Color kLightBackground   = Color(0xFFF5F5F5);
+const Color kLightBackground   = Color(0xFFFAFAFA);
 const Color kLightSurface      = Color(0xFFFFFFFF);
 const Color kLightOnSurface    = Color(0xFF1C1B1F);
 const Color kLightOnSurfaceVar = Color(0xFF49454F);
+
+// ── テーマ対応カラー拡張 (BuildContext) ──────────
+extension AppColors on BuildContext {
+  bool get _isDark => Theme.of(this).brightness == Brightness.dark;
+
+  Color get cBg        => _isDark ? kBackground           : const Color(0xFFFAFAFA);
+  Color get cCardLow   => _isDark ? kSurfaceContainerLow  : const Color(0xFFEEEEEE);
+  Color get cCard      => _isDark ? kSurfaceContainer     : const Color(0xFFE8E8E8);
+  Color get cCardHigh  => _isDark ? kSurfaceContainerHigh : const Color(0xFFE0E0E0);
+  Color get cCardTop   => _isDark ? kSurfaceHighest       : const Color(0xFFD8D8D8);
+  Color get cAppBar    => _isDark ? kSurfaceBright        : const Color(0xFFF0F0F0);
+  Color get cText      => _isDark ? kOnSurface            : const Color(0xFF2D2D2D);
+  Color get cTextSub   => _isDark ? kOnSurfaceVariant     : const Color(0xFF616161);
+  Color get cBorder    => _isDark ? kOutline              : const Color(0xFF9E9E9E);
+  Color get cBorderSub => _isDark ? kOutlineVariant       : const Color(0xFFD0D0D0);
+}
 
 // ── テーマ ──────────────────────────────────────
 ThemeData buildAppTheme() {

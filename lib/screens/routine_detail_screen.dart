@@ -55,9 +55,9 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface.withValues(alpha: 0.85),
+        backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: kPrimary),
@@ -89,7 +89,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     'EXERCISES',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 10,
-                      color: kOnSurfaceVariant,
+                      color: context.cTextSub,
                       letterSpacing: 1.5,
                     ),
                   ),
@@ -127,7 +127,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -141,7 +141,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                   'NEXT ROUTINE',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 9,
-                    color: kOnSurfaceVariant,
+                    color: context.cTextSub,
                     letterSpacing: 1.5,
                   ),
                 ),
@@ -151,7 +151,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    color: kOnSurface,
+                    color: context.cText,
                     letterSpacing: -0.5,
                     fontStyle: FontStyle.italic,
                   ),
@@ -164,7 +164,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     Text(
                       _duration,
                       style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11, color: kOnSurface),
+                          fontSize: 11, color: context.cText),
                     ),
                     const SizedBox(width: 14),
                     Icon(Icons.fitness_center, size: 14, color: color),
@@ -172,7 +172,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     Text(
                       '${_exerciseNames.length} 種目',
                       style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11, color: kOnSurface),
+                          fontSize: 11, color: context.cText),
                     ),
                   ],
                 ),
@@ -216,7 +216,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: kSurfaceContainerLow,
+                  color: context.cCardLow,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                       color: Colors.white.withValues(alpha: 0.06)),
@@ -227,7 +227,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                       width: 52,
                       height: 52,
                       decoration: BoxDecoration(
-                        color: kSurfaceContainerHigh,
+                        color: context.cCardHigh,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(_groupIcon(_group), color: color, size: 24),
@@ -239,13 +239,13 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                         style: GoogleFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: _isEditMode ? kOnSurfaceVariant : kOnSurface,
+                          color: _isEditMode ? context.cTextSub : context.cText,
                         ),
                       ),
                     ),
                     if (!_isEditMode)
-                      const Icon(Icons.chevron_right,
-                          size: 18, color: kOutlineVariant),
+                      Icon(Icons.chevron_right,
+                          size: 18, color: context.cBorderSub),
                   ],
                 ),
               ),

@@ -104,7 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       SnackBar(
         content: Text('プロフィールを保存しました',
             style: GoogleFonts.inter(color: Colors.white)),
-        backgroundColor: kSurfaceContainerHigh,
+        backgroundColor: context.cCardHigh,
         behavior: SnackBarBehavior.floating,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -115,9 +115,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface.withValues(alpha: 0.85),
+        backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         title: Text(
           'PROFILE',
@@ -144,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           width: 96,
                           height: 96,
                           decoration: BoxDecoration(
-                            color: kSurfaceContainerLow,
+                            color: context.cCardLow,
                             shape: BoxShape.circle,
                             border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.08)),
@@ -152,7 +152,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           clipBehavior: Clip.antiAlias,
                           child: _imagePath != null && File(_imagePath!).existsSync()
                               ? Image.file(File(_imagePath!), fit: BoxFit.cover)
-                              : const Icon(Icons.person, size: 48, color: kOutline),
+                              : Icon(Icons.person, size: 48, color: context.cBorder),
                         ),
                         Positioned(
                           bottom: 0,
@@ -183,7 +183,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'ユーザー名',
                       child: _textField(_nameCtrl),
                     ),
-                    const Divider(height: 1, color: kSurfaceContainerHigh),
+                    Divider(height: 1, color: context.cCardHigh),
                     _fieldRow(
                       label: '体重',
                       child: _textField(
@@ -192,7 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         suffix: 'kg',
                       ),
                     ),
-                    const Divider(height: 1, color: kSurfaceContainerHigh),
+                    Divider(height: 1, color: context.cCardHigh),
                     _fieldRow(
                       label: '性別',
                       child: Row(
@@ -213,7 +213,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color:
-                                      active ? kPrimary : kOutlineVariant,
+                                      active ? kPrimary : context.cBorderSub,
                                 ),
                               ),
                               child: Text(
@@ -223,7 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fontWeight: FontWeight.w600,
                                   color: active
                                       ? kPrimary
-                                      : kOnSurfaceVariant,
+                                      : context.cTextSub,
                                 ),
                               ),
                             ),
@@ -283,7 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final scale   = AppSettings.instance.textScale;
     return Container(
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -295,7 +295,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text('ライトモード',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: kOnSurfaceVariant, letterSpacing: 0.5)),
+                        fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
                 const Spacer(),
                 Switch(
                   value: isLight,
@@ -306,7 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          const Divider(height: 1, color: kSurfaceContainerHigh),
+          Divider(height: 1, color: context.cCardHigh),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: Column(
@@ -316,12 +316,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Text('文字サイズ',
                         style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11, color: kOnSurfaceVariant, letterSpacing: 0.5)),
+                            fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
                     const Spacer(),
                     Text(
                       scale <= 1.0 ? '標準' : scale <= 1.15 ? '大' : '特大',
                       style: GoogleFonts.inter(
-                          fontSize: 12, color: kOnSurface, fontWeight: FontWeight.w600),
+                          fontSize: 12, color: context.cText, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -331,7 +331,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   max: 1.3,
                   divisions: 2,
                   activeColor: kPrimary,
-                  inactiveColor: kSurfaceContainerHigh,
+                  inactiveColor: context.cCardHigh,
                   onChanged: (v) {
                     final snapped = v < 1.08 ? 1.0 : v < 1.22 ? 1.15 : 1.3;
                     AppSettings.instance.setTextScale(snapped);
@@ -350,7 +350,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildSupportCard() {
     return Container(
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -380,15 +380,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: kOnSurface)),
+                            color: context.cText)),
                     const SizedBox(height: 2),
                     Text('バグ・改善要望をメールで送信',
                         style: GoogleFonts.inter(
-                            fontSize: 11, color: kOnSurfaceVariant)),
+                            fontSize: 11, color: context.cTextSub)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 20, color: kOnSurfaceVariant),
+              Icon(Icons.chevron_right, size: 20, color: context.cTextSub),
             ],
           ),
         ),
@@ -401,16 +401,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         title: Text('不具合を報告',
             style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: kOnSurface)),
+                fontWeight: FontWeight.w700, color: context.cText)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('発生した不具合や改善要望を入力してください。',
                 style: GoogleFonts.inter(
-                    fontSize: 13, color: kOnSurfaceVariant, height: 1.4)),
+                    fontSize: 13, color: context.cTextSub, height: 1.4)),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
@@ -418,13 +418,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: InputDecoration(
                 hintText: '例）カレンダーから記録すると保存されない...',
                 filled: true,
-                fillColor: kSurfaceContainerHigh,
+                fillColor: context.cCardHigh,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
                 ),
               ),
-              style: GoogleFonts.inter(fontSize: 13, color: kOnSurface),
+              style: GoogleFonts.inter(fontSize: 13, color: context.cText),
             ),
           ],
         ),
@@ -432,7 +432,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                style: GoogleFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -448,7 +448,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? '（内容なし）'
         : ctrl.text.trim());
     final uri = Uri.parse(
-        'mailto:yutatsukinowa0724@gmail.com'
+        'mailto:yuta.sakai.0724@gmail.com'
         '?subject=RepRank%20不具合報告'
         '&body=$body');
     if (await canLaunchUrl(uri)) {
@@ -526,7 +526,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Text(
       title.toUpperCase(),
       style: GoogleFonts.jetBrainsMono(
-          fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1.5),
+          fontSize: 10, color: context.cTextSub, letterSpacing: 1.5),
     );
   }
 
@@ -541,7 +541,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // ログイン済み
           return Container(
             decoration: BoxDecoration(
-              color: kSurfaceContainerLow,
+              color: context.cCardLow,
               borderRadius: BorderRadius.circular(16),
               border:
                   Border.all(color: Colors.white.withValues(alpha: 0.06)),
@@ -576,7 +576,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             Text(
                               user.email ?? user.uid,
                               style: GoogleFonts.inter(
-                                  fontSize: 12, color: kOnSurfaceVariant),
+                                  fontSize: 12, color: context.cTextSub),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -585,7 +585,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-                const Divider(height: 1, color: kSurfaceContainerHigh),
+                Divider(height: 1, color: context.cCardHigh),
                 InkWell(
                   onTap: _signOut,
                   borderRadius: const BorderRadius.only(
@@ -597,12 +597,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         horizontal: 16, vertical: 14),
                     child: Row(
                       children: [
-                        const Icon(Icons.logout,
-                            size: 18, color: kOnSurfaceVariant),
+                        Icon(Icons.logout,
+                            size: 18, color: context.cTextSub),
                         const SizedBox(width: 12),
                         Text('ログアウト',
                             style: GoogleFonts.inter(
-                                fontSize: 14, color: kOnSurfaceVariant)),
+                                fontSize: 14, color: context.cTextSub)),
                       ],
                     ),
                   ),
@@ -619,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
             decoration: BoxDecoration(
-              color: kSurfaceContainerLow,
+              color: context.cCardLow,
               borderRadius: BorderRadius.circular(16),
               border:
                   Border.all(color: Colors.white.withValues(alpha: 0.06)),
@@ -630,11 +630,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: kSurfaceContainerHigh,
+                    color: context.cCardHigh,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.cloud_upload_outlined,
-                      size: 20, color: kOnSurfaceVariant),
+                  child: Icon(Icons.cloud_upload_outlined,
+                      size: 20, color: context.cTextSub),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -645,16 +645,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: kOnSurface)),
+                              color: context.cText)),
                       const SizedBox(height: 2),
                       Text('データをバックアップ・複数端末で同期',
                           style: GoogleFonts.inter(
-                              fontSize: 11, color: kOnSurfaceVariant)),
+                              fontSize: 11, color: context.cTextSub)),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right,
-                    size: 20, color: kOnSurfaceVariant),
+                Icon(Icons.chevron_right,
+                    size: 20, color: context.cTextSub),
               ],
             ),
           ),
@@ -667,17 +667,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         title: Text('ログアウト',
             style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: kOnSurface)),
+                fontWeight: FontWeight.w700, color: context.cText)),
         content: Text('ログアウトしますか？\nデータはこの端末に保持されます。',
-            style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+            style: GoogleFonts.inter(color: context.cTextSub)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                style: GoogleFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -695,7 +695,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -710,7 +710,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: kOnSurface,
+                    color: context.cText,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -718,7 +718,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   'ヒストグラム機能の精度向上のため、種目名と体重比のみを匿名で送信します。個人を特定する情報は送信されません。',
                   style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: kOnSurfaceVariant,
+                    color: context.cTextSub,
                     height: 1.4,
                   ),
                 ),
@@ -747,25 +747,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: kSurfaceContainerLow,
+          color: context.cCardLow,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.privacy_tip_outlined,
-                size: 18, color: kOnSurfaceVariant),
+            Icon(Icons.privacy_tip_outlined,
+                size: 18, color: context.cTextSub),
             const SizedBox(width: 12),
             Text(
               'プライバシーポリシー',
               style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: kOnSurface),
+                  color: context.cText),
             ),
             const Spacer(),
-            const Icon(Icons.open_in_new,
-                size: 14, color: kOnSurfaceVariant),
+            Icon(Icons.open_in_new,
+                size: 14, color: context.cTextSub),
           ],
         ),
       ),
@@ -775,7 +775,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildCard({required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -791,7 +791,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(label,
               style: GoogleFonts.jetBrainsMono(
                   fontSize: 11,
-                  color: kOnSurfaceVariant,
+                  color: context.cTextSub,
                   letterSpacing: 0.5)),
           const Spacer(),
           child,
@@ -808,7 +808,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         controller: ctrl,
         keyboardType: inputType,
         textAlign: TextAlign.right,
-        style: GoogleFonts.inter(fontSize: 14, color: kOnSurface),
+        style: GoogleFonts.inter(fontSize: 14, color: context.cText),
         decoration: InputDecoration(
           isDense: true,
           contentPadding:
@@ -820,7 +820,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           suffixText: suffix,
           suffixStyle: GoogleFonts.jetBrainsMono(
-              fontSize: 12, color: kOnSurfaceVariant),
+              fontSize: 12, color: context.cTextSub),
         ),
       ),
     );
@@ -836,7 +836,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -852,13 +852,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: GoogleFonts.jetBrainsMono(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      color: kOnSurface,
+                      color: context.cText,
                       height: 1),
                 ),
                 TextSpan(
                   text: unit,
                   style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11, color: kOnSurfaceVariant),
+                      fontSize: 11, color: context.cTextSub),
                 ),
               ],
             ),
@@ -866,7 +866,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 4),
           Text(label,
               style: GoogleFonts.jetBrainsMono(
-                  fontSize: 9, color: kOnSurfaceVariant),
+                  fontSize: 9, color: context.cTextSub),
               textAlign: TextAlign.center),
         ],
       ),

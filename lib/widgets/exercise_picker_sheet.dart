@@ -57,22 +57,22 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) => AlertDialog(
-          backgroundColor: kSurfaceContainerLow,
+          backgroundColor: context.cCardLow,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('種目を追加',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: kOnSurface)),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
                 autofocus: true,
-                style: GoogleFonts.inter(color: kOnSurface),
+                style: GoogleFonts.inter(color: context.cText),
                 decoration: InputDecoration(
                   hintText: '種目名',
-                  hintStyle: GoogleFonts.inter(color: kOnSurfaceVariant),
+                  hintStyle: GoogleFonts.inter(color: context.cTextSub),
                   enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: kOutlineVariant)),
+                      borderSide: BorderSide(color: context.cBorderSub)),
                   focusedBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: kPrimary)),
                 ),
@@ -82,16 +82,16 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 decoration: InputDecoration(
                   labelText: '部位',
                   labelStyle:
-                      GoogleFonts.inter(color: kOnSurfaceVariant, fontSize: 12),
+                      GoogleFonts.inter(color: context.cTextSub, fontSize: 12),
                   enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: kOutlineVariant)),
+                      borderSide: BorderSide(color: context.cBorderSub)),
                 ),
                 child: DropdownButton<MuscleGroup>(
                   value: selectedGroup,
                   isExpanded: true,
-                  dropdownColor: kSurfaceContainerLow,
+                  dropdownColor: context.cCardLow,
                   underline: const SizedBox.shrink(),
-                  style: GoogleFonts.inter(color: kOnSurface, fontSize: 14),
+                  style: GoogleFonts.inter(color: context.cText, fontSize: 14),
                   items: _groupOrder
                       .map((g) => DropdownMenuItem(value: g, child: Text(g.label)))
                       .toList(),
@@ -104,7 +104,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('キャンセル',
-                  style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                  style: GoogleFonts.inter(color: context.cTextSub)),
             ),
             TextButton(
               onPressed: () {
@@ -151,7 +151,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 ),
               ),
               iconColor: kPrimary,
-              collapsedIconColor: kOnSurfaceVariant,
+              collapsedIconColor: context.cTextSub,
               childrenPadding: EdgeInsets.zero,
               children: items.map((e) {
                 final name = e['name'] as String;
@@ -172,8 +172,8 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                         horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
                       color: isMarked
-                          ? kSurfaceContainerHigh
-                          : kSurfaceContainerLow,
+                          ? context.cCardHigh
+                          : context.cCardLow,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                           color: Colors.white.withValues(alpha: 0.05)),
@@ -186,15 +186,15 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: isMarked ? kOnSurfaceVariant : kOnSurface,
+                              color: isMarked ? context.cTextSub : context.cText,
                             ),
                           ),
                         ),
                         if (isMarked)
                           const Icon(Icons.check, color: kTertiary, size: 16)
                         else
-                          const Icon(Icons.chevron_right,
-                              color: kOutline, size: 18),
+                          Icon(Icons.chevron_right,
+                              color: context.cBorder, size: 18),
                       ],
                     ),
                   ),
@@ -214,7 +214,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
       minChildSize: 0.4,
       maxChildSize: 0.92,
       builder: (_, ctrl) => Material(
-        color: kSurface,
+        color: context.cBg,
         shape: RoundedRectangleBorder(
           borderRadius:
               const BorderRadius.vertical(top: Radius.circular(20)),
@@ -242,7 +242,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: kOnSurface,
+                      color: context.cText,
                     ),
                   ),
                   TextButton.icon(
@@ -266,7 +266,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
             ),
             if (widget.headerSlot != null) ...[
               widget.headerSlot!,
-              const Divider(height: 1, color: kSurfaceContainerHigh),
+              Divider(height: 1, color: context.cCardHigh),
             ],
             Expanded(
               child: ListView(

@@ -61,9 +61,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface.withValues(alpha: 0.85),
+        backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         title: Text(
           'WORKOUT',
@@ -80,7 +80,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ? const Center(child: CircularProgressIndicator(color: kPrimary))
           : RefreshIndicator(
               color: kPrimary,
-              backgroundColor: kSurfaceContainerLow,
+              backgroundColor: context.cCardLow,
               onRefresh: _loadSessions,
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -131,20 +131,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
             _autocompleteController = ctrl;
             return Container(
               decoration: BoxDecoration(
-                color: kSurfaceContainer,
+                color: context.cCard,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TextField(
                 controller: ctrl,
                 focusNode: focusNode,
                 onSubmitted: (_) => onSubmitted(),
-                style: GoogleFonts.inter(fontSize: 14, color: kOnSurface),
+                style: GoogleFonts.inter(fontSize: 14, color: context.cText),
                 decoration: InputDecoration(
                   hintText: '種目を検索...',
                   hintStyle:
-                      GoogleFonts.inter(fontSize: 14, color: kOnSurfaceVariant),
+                      GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
                   prefixIcon:
-                      const Icon(Icons.search, color: kOnSurfaceVariant),
+                      Icon(Icons.search, color: context.cTextSub),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 14),
@@ -158,7 +158,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               alignment: Alignment.topLeft,
               child: Material(
                 elevation: 4,
-                color: kSurfaceContainerLow,
+                color: context.cCardLow,
                 borderRadius: BorderRadius.circular(12),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
@@ -176,7 +176,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             '最近の記録',
                             style: GoogleFonts.jetBrainsMono(
                               fontSize: 9,
-                              color: kOnSurfaceVariant,
+                              color: context.cTextSub,
                               letterSpacing: 1.2,
                             ),
                           ),
@@ -202,13 +202,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                           ? Icons.history
                                           : Icons.search,
                                       size: 14,
-                                      color: kOnSurfaceVariant,
+                                      color: context.cTextSub,
                                     ),
                                     const SizedBox(width: 10),
                                     Text(
                                       option,
                                       style: GoogleFonts.inter(
-                                          fontSize: 14, color: kOnSurface),
+                                          fontSize: 14, color: context.cText),
                                     ),
                                   ],
                                 ),
@@ -256,7 +256,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -269,7 +269,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: kOnSurface),
+                    color: context.cText),
               ),
               const Spacer(),
               _calNavBtn(Icons.chevron_left, () {
@@ -288,7 +288,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: Text(d,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: kOnSurfaceVariant)),
+                        fontSize: 11, color: context.cTextSub)),
               );
             }).toList(),
           ),
@@ -318,10 +318,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: kSurfaceContainer,
+          color: context.cCard,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, size: 18, color: kOnSurfaceVariant),
+        child: Icon(icon, size: 18, color: context.cTextSub),
       ),
     );
   }
@@ -333,7 +333,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final hasWorkout = _isWorkoutDay(day);
 
     Color bgColor = Colors.transparent;
-    Color textColor = kOnSurface;
+    Color textColor = context.cText;
     Border? border;
 
     if (isSelected) {
@@ -400,7 +400,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         Text(
           '${day.month}月${day.day}日($weekday)',
           style: GoogleFonts.inter(
-              fontSize: 16, fontWeight: FontWeight.w700, color: kOnSurface),
+              fontSize: 16, fontWeight: FontWeight.w700, color: context.cText),
         ),
         Text(
           '継続日数: $streak 日',
@@ -427,7 +427,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             child: Text(
               'この日のトレーニング記録はありません',
               style:
-                  GoogleFonts.inter(fontSize: 13, color: kOnSurfaceVariant),
+                  GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
             ),
           ),
         ),
@@ -471,21 +471,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '記録を削除',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: kOnSurface),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: context.cText),
         ),
         content: Text(
           '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
-          style: GoogleFonts.inter(fontSize: 14, color: kOnSurfaceVariant),
+          style: GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                style: GoogleFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -517,7 +517,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: kSurfaceContainerLow,
+          color: context.cCardLow,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
         ),
@@ -545,12 +545,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: kOnSurface),
+                            color: context.cText),
                       ),
                       Text(
                         startLabel,
                         style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10, color: kOnSurfaceVariant),
+                            fontSize: 10, color: context.cTextSub),
                       ),
                     ],
                   ),
@@ -560,7 +560,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
-                        fontSize: 12, color: kOnSurfaceVariant),
+                        fontSize: 12, color: context.cTextSub),
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -570,7 +570,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       Text(
                         '${volume.toStringAsFixed(0)} kg',
                         style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11, color: kOnSurface),
+                            fontSize: 11, color: context.cText),
                       ),
                       if (duration != null) ...[
                         const SizedBox(width: 14),
@@ -580,7 +580,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         Text(
                           '${duration.inMinutes} 分',
                           style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11, color: kOnSurface),
+                              fontSize: 11, color: context.cText),
                         ),
                       ],
                     ],
@@ -589,7 +589,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: kOutline, size: 20),
+            Icon(Icons.chevron_right, color: context.cBorder, size: 20),
           ],
         ),
       ),
@@ -613,7 +613,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           'MONTHLY OVERVIEW',
           style: GoogleFonts.jetBrainsMono(
             fontSize: 10,
-            color: kOnSurfaceVariant,
+            color: context.cTextSub,
             letterSpacing: 1.2,
           ),
         ),
@@ -640,7 +640,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     : '${totalVolume.toStringAsFixed(0)}kg',
                 sub: null,
                 subColor: null,
-                valueColor: kOnSurface,
+                valueColor: context.cText,
               ),
             ),
           ],
@@ -654,7 +654,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 value: '${ms.length}',
                 sub: null,
                 subColor: null,
-                valueColor: kOnSurface,
+                valueColor: context.cText,
               ),
             ),
             const SizedBox(width: 10),
@@ -664,7 +664,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 value: '$streak Days',
                 sub: null,
                 subColor: null,
-                valueColor: kOnSurface,
+                valueColor: context.cText,
               ),
             ),
           ],
@@ -701,7 +701,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -711,7 +711,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Text(label,
               style: GoogleFonts.jetBrainsMono(
                   fontSize: 9,
-                  color: kOnSurfaceVariant,
+                  color: context.cTextSub,
                   letterSpacing: 0.8)),
           const SizedBox(height: 4),
           Text(value,

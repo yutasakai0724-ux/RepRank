@@ -51,7 +51,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: kOutlineVariant,
+                  color: context.cBorderSub,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -62,7 +62,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
               style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: kOnSurface,
+                color: context.cText,
               ),
             ),
             const SizedBox(height: 16),
@@ -77,7 +77,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: isSelected ? kSecondary : kSurfaceContainerHigh,
+                      color: isSelected ? kSecondary : context.cCardHigh,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: isSelected ? kSecondary : Colors.transparent,
@@ -88,7 +88,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isSelected ? Colors.white : kOnSurface,
+                        color: isSelected ? Colors.white : context.cText,
                       ),
                     ),
                   ),
@@ -100,7 +100,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
               'カスタム（秒）',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 10,
-                color: kOnSurfaceVariant,
+                color: context.cTextSub,
                 letterSpacing: 1,
               ),
             ),
@@ -111,21 +111,21 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: kOnSurface,
+                color: context.cText,
               ),
               decoration: InputDecoration(
                 hintText: '例: 75',
                 hintStyle: GoogleFonts.jetBrainsMono(
-                  color: kOnSurfaceVariant.withValues(alpha: 0.5),
+                  color: context.cTextSub.withValues(alpha: 0.5),
                   fontSize: 14,
                 ),
                 suffixText: '秒',
                 suffixStyle: GoogleFonts.jetBrainsMono(
-                  color: kOnSurfaceVariant,
+                  color: context.cTextSub,
                   fontSize: 14,
                 ),
                 filled: true,
-                fillColor: kSurfaceContainerHigh,
+                fillColor: context.cCardHigh,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
@@ -150,7 +150,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                     onPressed: () => Navigator.pop(context),
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: kSurfaceContainerHigh,
+                      backgroundColor: context.cCardHigh,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -160,7 +160,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: kOnSurfaceVariant,
+                        color: context.cTextSub,
                       ),
                     ),
                   ),

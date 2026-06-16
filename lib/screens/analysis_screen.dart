@@ -189,21 +189,21 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('体重を設定',
             style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: kOnSurface)),
+                fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.inter(color: kOnSurface),
+          style: GoogleFonts.inter(color: context.cText),
           decoration: InputDecoration(
             suffixText: 'kg',
-            suffixStyle: GoogleFonts.jetBrainsMono(color: kOnSurfaceVariant),
+            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: kOutlineVariant)),
+                borderSide: BorderSide(color: context.cBorderSub)),
             focusedBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: kPrimary)),
           ),
@@ -212,7 +212,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('キャンセル',
-                  style: GoogleFonts.inter(color: kOnSurfaceVariant))),
+                  style: GoogleFonts.inter(color: context.cTextSub))),
           TextButton(
             onPressed: () async {
               final v = double.tryParse(ctrl.text);
@@ -236,9 +236,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final summaries = _summaries;
 
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface.withValues(alpha: 0.85),
+        backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         title: Text(
           'REP RANK',
@@ -263,11 +263,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     style: GoogleFonts.jetBrainsMono(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: kOnSurface),
+                        color: context.cText),
                   ),
                   Text('体重 ✎',
                       style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9, color: kOnSurfaceVariant)),
+                          fontSize: 9, color: context.cTextSub)),
                 ],
               ),
             ),
@@ -392,7 +392,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             '経過時間',
             style: GoogleFonts.jetBrainsMono(
               fontSize: 10,
-              color: kOnSurfaceVariant,
+              color: context.cTextSub,
               letterSpacing: 1.5,
             ),
           ),
@@ -404,8 +404,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 child: _actionButton(
                   icon: Icons.play_arrow,
                   label: 'START',
-                  bgColor: isRunning ? kSurfaceContainerHigh : kPrimary,
-                  fgColor: isRunning ? kOnSurfaceVariant : Colors.white,
+                  bgColor: isRunning ? context.cCardHigh : kPrimary,
+                  fgColor: isRunning ? context.cTextSub : Colors.white,
                   disabled: isRunning,
                   onTap: () {
                     StopwatchService.instance.start();
@@ -418,8 +418,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 child: _actionButton(
                   icon: Icons.pause,
                   label: 'STOP',
-                  bgColor: isRunning ? kSurfaceContainerHigh : kSurfaceContainerHigh,
-                  fgColor: isRunning ? kPrimaryLight : kOnSurfaceVariant,
+                  bgColor: isRunning ? context.cCardHigh : context.cCardHigh,
+                  fgColor: isRunning ? kPrimaryLight : context.cTextSub,
                   borderColor: isRunning
                       ? kPrimaryLight.withValues(alpha: 0.5)
                       : null,
@@ -435,8 +435,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 child: _actionButton(
                   icon: Icons.refresh,
                   label: 'RESET',
-                  bgColor: kSurfaceContainerHigh,
-                  fgColor: kOnSurfaceVariant,
+                  bgColor: context.cCardHigh,
+                  fgColor: context.cTextSub,
                   onTap: () {
                     StopwatchService.instance.reset();
                     _updateElapsed();
@@ -499,14 +499,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       child: Column(
         children: [
           Icon(Icons.analytics_outlined,
-              size: 56, color: kOnSurfaceVariant.withValues(alpha: 0.2)),
+              size: 56, color: context.cTextSub.withValues(alpha: 0.2)),
           const SizedBox(height: 14),
           Text(
             'まだデータがありません',
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: kOnSurfaceVariant,
+              color: context.cTextSub,
             ),
           ),
           const SizedBox(height: 6),
@@ -514,7 +514,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             '＋ボタンからトレーニングを開始',
             style: GoogleFonts.inter(
               fontSize: 12,
-              color: kOnSurfaceVariant.withValues(alpha: 0.6),
+              color: context.cTextSub.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -534,7 +534,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border:
             Border.all(color: topTier.color.withValues(alpha: 0.25)),
@@ -548,7 +548,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 Text('総合レベル',
                     style: GoogleFonts.jetBrainsMono(
                         fontSize: 10,
-                        color: kOnSurfaceVariant,
+                        color: context.cTextSub,
                         letterSpacing: 1)),
                 const SizedBox(height: 8),
                 Text(
@@ -633,7 +633,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -643,7 +643,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           Text('部位カバレッジ',
               style: GoogleFonts.jetBrainsMono(
                   fontSize: 10,
-                  color: kOnSurfaceVariant,
+                  color: context.cTextSub,
                   letterSpacing: 1)),
           const SizedBox(height: 12),
           Row(
@@ -658,7 +658,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     decoration: BoxDecoration(
                       color: hit
                           ? kPrimary.withValues(alpha: 0.12)
-                          : kSurfaceContainerHigh,
+                          : context.cCardHigh,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: hit
@@ -669,7 +669,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     child: Icon(
                       _groupIcon(g),
                       size: 18,
-                      color: hit ? kPrimary : kOnSurfaceVariant.withValues(alpha: 0.3),
+                      color: hit ? kPrimary : context.cTextSub.withValues(alpha: 0.3),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -677,7 +677,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     g.label,
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 9,
-                      color: hit ? kOnSurface : kOnSurfaceVariant.withValues(alpha: 0.4),
+                      color: hit ? context.cText : context.cTextSub.withValues(alpha: 0.4),
                     ),
                   ),
                 ],
@@ -698,7 +698,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: nextTier.color.withValues(alpha: 0.2)),
       ),
@@ -708,7 +708,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           Text('最も近い目標',
               style: GoogleFonts.jetBrainsMono(
                   fontSize: 10,
-                  color: kOnSurfaceVariant,
+                  color: context.cTextSub,
                   letterSpacing: 1)),
           const SizedBox(height: 12),
           Row(
@@ -733,12 +733,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: kOnSurface),
+                          color: context.cText),
                     ),
                     Text(
                       '${s.result.tier.label} → ${nextTier.label}',
                       style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11, color: kOnSurfaceVariant),
+                          fontSize: 11, color: context.cTextSub),
                     ),
                   ],
                 ),
@@ -758,7 +758,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   Text(
                     'あと +${diff.toStringAsFixed(1)}kg',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10, color: kOnSurfaceVariant),
+                        fontSize: 10, color: context.cTextSub),
                   ),
                 ],
               ),
@@ -770,7 +770,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             child: LinearProgressIndicator(
               value: s.result.progressInTier,
               minHeight: 6,
-              backgroundColor: kSurfaceContainerHigh,
+              backgroundColor: context.cCardHigh,
               valueColor: AlwaysStoppedAnimation(nextTier.color),
             ),
           ),
@@ -784,7 +784,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Text(
       title.toUpperCase(),
       style: GoogleFonts.jetBrainsMono(
-          fontSize: 10, color: kOnSurfaceVariant, letterSpacing: 1.5),
+          fontSize: 10, color: context.cTextSub, letterSpacing: 1.5),
     );
   }
 
@@ -818,7 +818,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: kSurfaceContainerLow,
+          color: context.cCardLow,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: tier.color.withValues(alpha: 0.15)),
         ),
@@ -858,7 +858,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: kOnSurface,
+                    color: context.cText,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -871,7 +871,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       style: GoogleFonts.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
-                        color: kOnSurface,
+                        color: context.cText,
                         letterSpacing: -1,
                         height: 1,
                       ),
@@ -880,7 +880,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       padding: const EdgeInsets.only(bottom: 2, left: 2),
                       child: Text('kg',
                           style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11, color: kOnSurfaceVariant)),
+                              fontSize: 11, color: context.cTextSub)),
                     ),
                   ],
                 ),
@@ -904,7 +904,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         decoration: BoxDecoration(
           color: isReady
               ? kPrimary.withValues(alpha: 0.1)
-              : kSurfaceContainerLow,
+              : context.cCardLow,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isReady
@@ -918,7 +918,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             Icon(
               Icons.volunteer_activism_outlined,
               size: 18,
-              color: isReady ? kPrimary : kOnSurfaceVariant,
+              color: isReady ? kPrimary : context.cTextSub,
             ),
             const SizedBox(width: 8),
             Text(
@@ -926,7 +926,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: isReady ? kPrimary : kOnSurfaceVariant,
+                color: isReady ? kPrimary : context.cTextSub,
               ),
             ),
           ],

@@ -44,12 +44,12 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: context.cBg,
       appBar: AppBar(
-        backgroundColor: kSurface.withValues(alpha: 0.85),
+        backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: kOnSurface),
+          icon: Icon(Icons.arrow_back, color: context.cText),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -57,7 +57,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           style: GoogleFonts.inter(
             fontSize: 17,
             fontWeight: FontWeight.w700,
-            color: kOnSurface,
+            color: context.cText,
           ),
         ),
         actions: [
@@ -67,7 +67,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
             onPressed: _addExerciseSheet,
           ),
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: kOnSurfaceVariant),
+            icon: Icon(Icons.share_outlined, color: context.cTextSub),
             onPressed: () {},
           ),
         ],
@@ -114,7 +114,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           Icon(
             Icons.fitness_center,
             size: 56,
-            color: kOnSurfaceVariant.withValues(alpha: 0.25),
+            color: context.cTextSub.withValues(alpha: 0.25),
           ),
           const SizedBox(height: 16),
           Text(
@@ -122,7 +122,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
             style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: kOnSurfaceVariant,
+              color: context.cTextSub,
             ),
           ),
           const SizedBox(height: 6),
@@ -130,7 +130,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
             '＋ボタンで種目を追加できます',
             style: GoogleFonts.inter(
               fontSize: 12,
-              color: kOnSurfaceVariant.withValues(alpha: 0.6),
+              color: context.cTextSub.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -160,7 +160,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           '${_sessions.length} セッション',
           style: GoogleFonts.jetBrainsMono(
             fontSize: 11,
-            color: kOnSurfaceVariant,
+            color: context.cTextSub,
           ),
         ),
       ],
@@ -200,20 +200,20 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceContainerLow,
+        backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('記録を削除',
             style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: kOnSurface)),
+                fontWeight: FontWeight.w700, color: context.cText)),
         content: Text(
           '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
-          style: GoogleFonts.inter(fontSize: 14, color: kOnSurfaceVariant),
+          style: GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+                style: GoogleFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -238,7 +238,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: kSurfaceContainerLow,
+        color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -281,14 +281,14 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: kOnSurface,
+                                color: context.cText,
                               ),
                             ),
                             Text(
                               startLabel,
                               style: GoogleFonts.jetBrainsMono(
                                 fontSize: 10,
-                                color: kOnSurfaceVariant,
+                                color: context.cTextSub,
                               ),
                             ),
                           ],
@@ -303,7 +303,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
                             fontSize: 11,
-                            color: kOnSurfaceVariant,
+                            color: context.cTextSub,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -315,7 +315,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                             Text(
                               '${totalVolume.toStringAsFixed(0)} kg',
                               style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 11, color: kOnSurface),
+                                  fontSize: 11, color: context.cText),
                             ),
                             if (duration != null) ...[
                               const SizedBox(width: 14),
@@ -325,7 +325,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                               Text(
                                 '${duration.inMinutes} 分',
                                 style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 11, color: kOnSurface),
+                                    fontSize: 11, color: context.cText),
                               ),
                             ],
                           ],
@@ -337,8 +337,8 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   AnimatedRotation(
                     turns: isExpanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
-                    child: const Icon(Icons.keyboard_arrow_down,
-                        color: kOutline, size: 22),
+                    child: Icon(Icons.keyboard_arrow_down,
+                        color: context.cBorder, size: 22),
                   ),
                 ],
               ),
@@ -346,7 +346,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           ),
           // 展開時: 種目リスト
           if (isExpanded) ...[
-            const Divider(height: 1, color: kSurfaceContainerHigh),
+            Divider(height: 1, color: context.cCardHigh),
             ...session.exercises.asMap().entries.map(
               (entry) => _buildExerciseRow(session, entry.key, entry.value),
             ),
@@ -379,7 +379,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           border: Border(
             bottom: BorderSide(
               color: exIdx < session.exercises.length - 1
-                  ? kSurfaceContainerHigh
+                  ? context.cCardHigh
                   : Colors.transparent,
             ),
           ),
@@ -427,7 +427,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: kOnSurface,
+                          color: context.cText,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -435,14 +435,14 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 1),
                         decoration: BoxDecoration(
-                          color: kSurfaceContainerHigh,
+                          color: context.cCardHigh,
                           borderRadius: BorderRadius.circular(99),
                         ),
                         child: Text(
                           exercise.muscleGroup.label,
                           style: GoogleFonts.jetBrainsMono(
                             fontSize: 9,
-                            color: kOnSurfaceVariant,
+                            color: context.cTextSub,
                           ),
                         ),
                       ),
@@ -454,7 +454,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                     '${exercise.sets.length} セット  •  ${totalVol.toStringAsFixed(0)} kg',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 10,
-                      color: kOnSurfaceVariant,
+                      color: context.cTextSub,
                     ),
                   ),
                 ],
@@ -468,7 +468,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   '1RM',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 9,
-                    color: kOnSurfaceVariant,
+                    color: context.cTextSub,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -483,7 +483,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               ],
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: kOutline, size: 18),
+            Icon(Icons.chevron_right, color: context.cBorder, size: 18),
           ],
         ),
       ),
