@@ -21,12 +21,14 @@ import 'screens/routines_screen.dart';
 import 'screens/profile_screen.dart';
 import 'widgets/exercise_picker_sheet.dart';
 import 'widgets/banner_ad_widget.dart';
+import 'services/app_settings.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await FirebaseInit.initialize();
   await AdService.instance.initialize();
+  await AppSettings.instance.load();
 
   // 初期リポジトリ（SQLiteのみ）で起動
   final local = SqliteWorkoutRepository(DatabaseHelper.instance);
@@ -56,15 +58,42 @@ void _switchToLocal() {
   SessionManager.instance.init(local);
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.instance.addListener(_onSettingsChanged);
+  }
+
+  @override
+  void dispose() {
+    AppSettings.instance.removeListener(_onSettingsChanged);
+    super.dispose();
+  }
+
+  void _onSettingsChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Rep Rank',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
+      themeMode: AppSettings.instance.themeMode,
+      theme: buildLightTheme(),
+      darkTheme: buildAppTheme(),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(AppSettings.instance.textScale),
+        ),
+        child: child!,
+      ),
       home: const _AuthGate(),
     );
   }

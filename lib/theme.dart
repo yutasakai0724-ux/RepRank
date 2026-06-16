@@ -29,6 +29,12 @@ const Color kOnSurfaceVariant    = Color(0xFFE2BFB0); // Secondary text (warm)
 const Color kOutline             = Color(0xFFA98A7D); // Borders
 const Color kOutlineVariant      = Color(0xFF5A4136); // Subtle borders
 
+// ── ライトモード用カラー ──────────────────────────
+const Color kLightBackground   = Color(0xFFF5F5F5);
+const Color kLightSurface      = Color(0xFFFFFFFF);
+const Color kLightOnSurface    = Color(0xFF1C1B1F);
+const Color kLightOnSurfaceVar = Color(0xFF49454F);
+
 // ── テーマ ──────────────────────────────────────
 ThemeData buildAppTheme() {
   return ThemeData(
@@ -103,5 +109,55 @@ ThemeData buildAppTheme() {
         side: BorderSide(color: kOutlineVariant.withValues(alpha: 0.6)),
       ),
     ),
+  );
+}
+
+ThemeData buildLightTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: kLightBackground,
+    colorScheme: ColorScheme.light(
+      primary: kPrimary,
+      onPrimary: Colors.white,
+      secondary: kSecondaryContainer,
+      surface: kLightSurface,
+      onSurface: kLightOnSurface,
+      error: const Color(0xFFB3261E),
+    ),
+    appBarTheme: AppBarTheme(
+      backgroundColor: kLightSurface,
+      foregroundColor: kLightOnSurface,
+      elevation: 0,
+      centerTitle: false,
+      titleTextStyle: GoogleFonts.inter(
+        fontSize: 16, fontWeight: FontWeight.w700,
+        color: kLightOnSurface, letterSpacing: 0.5,
+      ),
+      iconTheme: IconThemeData(color: kLightOnSurface),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: kPrimary,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(double.infinity, 52),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700),
+        elevation: 0,
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: const Color(0xFFEEEEEE),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: kPrimary, width: 2),
+      ),
+    ),
+    dividerColor: const Color(0xFFE0E0E0),
   );
 }

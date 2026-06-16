@@ -25,6 +25,7 @@ class ExerciseAnalysisScreen extends StatefulWidget {
 
 class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   double _bodyWeight = 70.0;
+  String _gender = '男性';
   late StrengthResult _result;
   // 1RM 推移データ: {date → maxOneRM}
   List<_RMPoint> _history = [];
@@ -37,9 +38,11 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
 
   Future<void> _loadBodyWeight() async {
     final weight = await UserPreferences.instance.getBodyWeight();
+    final gender = await UserPreferences.instance.getGender();
     if (mounted) {
       setState(() {
         _bodyWeight = weight;
+        _gender = gender;
         _recalculate();
       });
     }
@@ -72,6 +75,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
       muscleGroupLabel: widget.exercise.muscleGroup.label,
       oneRM: widget.currentOneRM,
       bodyWeight: _bodyWeight,
+      isFemale: _gender == '女性',
     );
   }
 

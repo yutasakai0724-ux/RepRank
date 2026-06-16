@@ -517,10 +517,17 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               ),
             );
           } else {
+            // 過去日付の新規種目 → 指定日付でセッションを作成してから記録
+            final session = await SessionManager.instance
+                .createSessionForDate(widget.date);
+            if (!context.mounted) return;
             await Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ExerciseRecordScreen(exercise: exercise),
+                builder: (_) => ExerciseRecordScreen(
+                  exercise: exercise,
+                  sessionId: session.id,
+                ),
               ),
             );
           }

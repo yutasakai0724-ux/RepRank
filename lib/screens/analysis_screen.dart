@@ -22,6 +22,7 @@ class AnalysisScreen extends StatefulWidget {
 class _AnalysisScreenState extends State<AnalysisScreen>
     with SingleTickerProviderStateMixin {
   double _bodyWeight = 70.0;
+  String _gender = '男性';
   List<WorkoutSession> _allSessions = [];
   bool _isLoading = true;
 
@@ -116,10 +117,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   Future<void> _loadData() async {
     final sessions = await SessionManager.instance.getAllSessions();
     final weight = await UserPreferences.instance.getBodyWeight();
+    final gender = await UserPreferences.instance.getGender();
     if (mounted) {
       setState(() {
         _allSessions = sessions;
         _bodyWeight = weight;
+        _gender = gender;
         _isLoading = false;
       });
     }
@@ -147,6 +150,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           muscleGroupLabel: e.muscleGroup.label,
           oneRM: maxRM,
           bodyWeight: _bodyWeight,
+          isFemale: _gender == '女性',
         );
         best[e.name] =
             _ExerciseSummary(exercise: e, maxRM: maxRM, result: result);

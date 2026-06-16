@@ -97,6 +97,16 @@ class SessionManager {
     return null;
   }
 
+  /// 指定日付でセッションを新規作成して保存（カレンダーから過去日付に記録する際に使用）
+  Future<WorkoutSession> createSessionForDate(DateTime date) async {
+    final session = WorkoutSession(
+      date: date,
+      startedAt: date,
+    );
+    await _repo.upsertSession(session);
+    return session;
+  }
+
   /// セッション終了（finishedAt を記録して DB 保存）
   Future<WorkoutSession?> finish() async {
     if (_active == null) return null;

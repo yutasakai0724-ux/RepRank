@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
+import '../services/app_settings.dart';
 import '../services/auth_service.dart';
 import '../services/user_preferences.dart';
 import '../services/session_manager.dart';
@@ -21,6 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _gender = '男性';
   bool _shareStats = false;
   bool _isLoading = true;
+  String? _imagePath;
 
   @override
   void initState() {
@@ -30,19 +36,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadPrefs() async {
     final prefs = UserPreferences.instance;
-    final name   = await prefs.getUsername();
-    final weight = await prefs.getBodyWeight();
-    final gender = await prefs.getGender();
-    final share  = await prefs.getShareStats();
+    final name      = await prefs.getUsername();
+    final weight    = await prefs.getBodyWeight();
+    final gender    = await prefs.getGender();
+    final share     = await prefs.getShareStats();
+    final imagePath = await prefs.getProfileImagePath();
     if (mounted) {
       setState(() {
         _nameCtrl.text   = name;
         _weightCtrl.text = weight.toStringAsFixed(1);
         _gender          = gender;
         _shareStats      = share;
+        _imagePath       = imagePath;
         _isLoading       = false;
       });
     }
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 400,
+    );
+    if (image == null || !mounted) return;
+    final docsDir = await getApplicationDocumentsDirectory();
+    final ext     = p.extension(image.path).isNotEmpty ? p.extension(image.path) : '.jpg';
+    final dest    = p.join(docsDir.path, 'profile_image$ext');
+    await File(image.path).copy(dest);
+    await UserPreferences.instance.setProfileImagePath(dest);
+    if (mounted) setState(() => _imagePath = dest);
   }
 
   @override
@@ -53,6 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _savePrefs() async {
+    FocusScope.of(context).unfocus();
     final weight = double.tryParse(_weightCtrl.text);
     if (weight == null || weight <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -111,35 +136,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 // ── アバター ──
                 Center(
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 96,
-                        height: 96,
-                        decoration: BoxDecoration(
-                          color: kSurfaceContainerLow,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08)),
-                        ),
-                        child:
-                            const Icon(Icons.person, size: 48, color: kOutline),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: const BoxDecoration(
-                            color: kPrimary,
+                  child: GestureDetector(
+                    onTap: _pickImage,
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          decoration: BoxDecoration(
+                            color: kSurfaceContainerLow,
                             shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08)),
                           ),
-                          child: const Icon(Icons.edit,
-                              size: 15, color: Colors.white),
+                          clipBehavior: Clip.antiAlias,
+                          child: _imagePath != null && File(_imagePath!).existsSync()
+                              ? Image.file(File(_imagePath!), fit: BoxFit.cover)
+                              : const Icon(Icons.person, size: 48, color: kOutline),
                         ),
-                      ),
-                    ],
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(
+                              color: kPrimary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.edit,
+                                size: 15, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -219,6 +249,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildPrivacyPolicyLink(),
                 const SizedBox(height: 24),
 
+                // ── 表示設定 ──
+                _sectionHeader('表示設定'),
+                const SizedBox(height: 12),
+                _buildDisplayCard(),
+                const SizedBox(height: 24),
+
+                // ── サポート ──
+                _sectionHeader('サポート'),
+                const SizedBox(height: 12),
+                _buildSupportCard(),
+                const SizedBox(height: 24),
+
                 // ── 統計 ──
                 _sectionHeader('統計'),
                 const SizedBox(height: 12),
@@ -226,36 +268,192 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 32),
 
                 // ── 保存ボタン ──
-                GestureDetector(
-                  onTap: _savePrefs,
-                  child: Container(
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: kPrimary,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: kPrimary.withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        '保存',
-                        style: GoogleFonts.inter(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
+                ElevatedButton(
+                  onPressed: _savePrefs,
+                  child: const Text('保存'),
                 ),
               ],
             ),
     );
+  }
+
+  // ── 表示設定カード ────────────────────────────────────────────
+  Widget _buildDisplayCard() {
+    final isLight = AppSettings.instance.themeMode == ThemeMode.light;
+    final scale   = AppSettings.instance.textScale;
+    return Container(
+      decoration: BoxDecoration(
+        color: kSurfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              children: [
+                Text('ライトモード',
+                    style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11, color: kOnSurfaceVariant, letterSpacing: 0.5)),
+                const Spacer(),
+                Switch(
+                  value: isLight,
+                  activeThumbColor: kPrimary,
+                  onChanged: (v) => AppSettings.instance
+                      .setThemeMode(v ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: kSurfaceContainerHigh),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('文字サイズ',
+                        style: GoogleFonts.jetBrainsMono(
+                            fontSize: 11, color: kOnSurfaceVariant, letterSpacing: 0.5)),
+                    const Spacer(),
+                    Text(
+                      scale <= 1.0 ? '標準' : scale <= 1.15 ? '大' : '特大',
+                      style: GoogleFonts.inter(
+                          fontSize: 12, color: kOnSurface, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: scale,
+                  min: 1.0,
+                  max: 1.3,
+                  divisions: 2,
+                  activeColor: kPrimary,
+                  inactiveColor: kSurfaceContainerHigh,
+                  onChanged: (v) {
+                    final snapped = v < 1.08 ? 1.0 : v < 1.22 ? 1.15 : 1.3;
+                    AppSettings.instance.setTextScale(snapped);
+                    setState(() {});
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── サポートカード ────────────────────────────────────────────
+  Widget _buildSupportCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: kSurfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: InkWell(
+        onTap: _showBugReportDialog,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: kTertiary.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.bug_report_outlined,
+                    size: 20, color: kTertiary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('不具合を報告',
+                        style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: kOnSurface)),
+                    const SizedBox(height: 2),
+                    Text('バグ・改善要望をメールで送信',
+                        style: GoogleFonts.inter(
+                            fontSize: 11, color: kOnSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 20, color: kOnSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showBugReportDialog() async {
+    final ctrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kSurfaceContainerLow,
+        title: Text('不具合を報告',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: kOnSurface)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('発生した不具合や改善要望を入力してください。',
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: kOnSurfaceVariant, height: 1.4)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              maxLines: 5,
+              decoration: InputDecoration(
+                hintText: '例）カレンダーから記録すると保存されない...',
+                filled: true,
+                fillColor: kSurfaceContainerHigh,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              style: GoogleFonts.inter(fontSize: 13, color: kOnSurface),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('キャンセル',
+                style: GoogleFonts.inter(color: kOnSurfaceVariant)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('送信',
+                style: GoogleFonts.inter(
+                    color: kPrimary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final body = Uri.encodeComponent(ctrl.text.trim().isEmpty
+        ? '（内容なし）'
+        : ctrl.text.trim());
+    final uri = Uri.parse(
+        'mailto:yutatsukinowa0724@gmail.com'
+        '?subject=RepRank%20不具合報告'
+        '&body=$body');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 
   // ── 統計行（実データから計算）──────────────────────────────────

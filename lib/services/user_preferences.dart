@@ -104,6 +104,24 @@ class UserPreferences {
     await prefs.setBool(_keyPrivacyConsented, true);
   }
 
+  // ── プロフィール画像パス ──────────────────────────────────────
+
+  static const _keyProfileImagePath = 'profile_image_path';
+
+  Future<String?> getProfileImagePath() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyProfileImagePath);
+  }
+
+  Future<void> setProfileImagePath(String? path) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (path == null) {
+      await prefs.remove(_keyProfileImagePath);
+    } else {
+      await prefs.setString(_keyProfileImagePath, path);
+    }
+  }
+
   // ── 匿名統計データの共有許可 ────────────────────────────────
   // ヒストグラム機能のために体重比を匿名で送信することへの同意フラグ。
   // デフォルト false（明示的な opt-in が必要）。

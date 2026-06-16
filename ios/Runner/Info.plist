@@ -70,6 +70,11 @@
 	<!-- 標準暗号化のみ使用 (HTTPS/SQLite等) → 輸出規制対象外 -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- image_picker: プロフィール画像のフォトライブラリアクセス -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>プロフィール画像を選択するためにフォトライブラリにアクセスします。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>プロフィール画像を保存するためにフォトライブラリへのアクセスが必要です。</string>
 	<!-- url_launcher: 外部リンク（プライバシーポリシー等）に必要 -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
