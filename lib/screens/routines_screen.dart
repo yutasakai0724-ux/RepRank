@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
+import '../services/user_preferences.dart';
 import 'exercise_record_screen.dart';
 import 'routine_detail_screen.dart';
 
@@ -13,10 +14,30 @@ class RoutinesScreen extends StatefulWidget {
 }
 
 class _RoutinesScreenState extends State<RoutinesScreen> {
-  int _tabIndex = 0;      // 0: マイセット, 1: すべての種目
-  bool _isEditMode = false; // ルーチン編集モード
+  int _tabIndex = 0;
+  bool _isEditMode = false;
 
   final List<Map<String, dynamic>> _routines = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoutines();
+  }
+
+  Future<void> _loadRoutines() async {
+    final saved = await UserPreferences.instance.getRoutines();
+    if (mounted && saved.isNotEmpty) {
+      setState(() {
+        _routines.clear();
+        _routines.addAll(saved);
+      });
+    }
+  }
+
+  Future<void> _saveRoutines() async {
+    await UserPreferences.instance.saveRoutines(_routines);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +188,10 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                   MaterialPageRoute(
                     builder: (_) => RoutineDetailScreen(routine: routine),
                   ),
-                ),
+                ).then((_) {
+                  _saveRoutines();
+                  setState(() {});
+                }),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -215,6 +239,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     GestureDetector(
                       onTap: () {
                         setState(() => _routines.removeAt(idx));
+                        _saveRoutines();
                       },
                       child: Container(
                         width: 28,
@@ -360,6 +385,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     'group': MuscleGroup.chest,
                   });
                 });
+                _saveRoutines();
                 Navigator.pop(ctx);
               }
             },

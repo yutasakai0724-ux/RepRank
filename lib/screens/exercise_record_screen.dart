@@ -1,19 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/analytics_service.dart';
 import '../services/cloud_data_service.dart';
+import '../services/rest_timer_service.dart';
 import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
 import '../widgets/duration_picker_sheet.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import 'exercise_analysis_screen.dart';
-
-enum _RestState { idle, running, paused, finished }
 
 class ExerciseRecordScreen extends StatefulWidget {
   final Exercise exercise;
@@ -33,22 +31,22 @@ class ExerciseRecordScreen extends StatefulWidget {
 class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   bool _isKg = true;
   Timer? _saveDebounce;
+
   late List<WorkoutSet> _sets;
   late List<TextEditingController> _weightCtrl;
   late List<TextEditingController> _repsCtrl;
+  late List<TextEditingController> _setMemoCtrl;
+  late TextEditingController _exerciseMemoCtrl;
 
-  // 保存状態: 'saved' | 'saving' | 'unsaved'
   String _saveStatus = 'saved';
+  Exercise? _prevRecord;
 
-  WorkoutSet? _prevBestSet;
+  // ── セッション体重 ────────────────────────────────────
+  double? _bodyWeightKg;
+  String? _resolvedSessionId;
 
-  // ── 休憩タイマー ─────────────────────────────────────
-  Timer? _tickTimer;
-
-  _RestState _restState = _RestState.idle;
-  int _restDurationSec = 60;
-  int _restRemainingSec = 60;
-  Timer? _restFinishedAutoReset;
+  // RestTimerService はグローバル singleton。タイマーUIの再描画用タイマー。
+  Timer? _uiRefreshTimer;
 
   @override
   void initState() {
@@ -60,125 +58,183 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         weight: widget.exercise.sets[i].weight,
         reps: widget.exercise.sets[i].reps,
         recordedAt: widget.exercise.sets[i].recordedAt,
+        memo: widget.exercise.sets[i].memo,
       ),
     );
     _weightCtrl = _sets
-        .map((s) => TextEditingController(text: s.weight.toStringAsFixed(1)))
+        .map((s) => TextEditingController(text: _formatWeight(s.weight)))
         .toList();
     _repsCtrl = _sets
         .map((s) => TextEditingController(text: '${s.reps}'))
         .toList();
+    _setMemoCtrl = _sets
+        .map((s) => TextEditingController(text: s.memo ?? ''))
+        .toList();
+    _exerciseMemoCtrl = TextEditingController(text: widget.exercise.memo ?? '');
 
-    _loadPrevBest();
+    _loadPrevRecord();
     _loadRestDuration();
+    _loadUnit();
 
-    // 新規追加時（sessionId 未指定）はアクティブセッションを作成 & 即保存
+    // RestTimerService の変更を受け取るリスナー登録
+    RestTimerService.instance.addListener(_onTimerChanged);
+    // この画面にタイマーUIがあるため、全画面共通オーバーレイは抑制する
+    RestTimerService.instance.suppressOverlay();
+
+    // 新規追加時（sessionId 未指定）はアクティブセッションを作成
+    // 種目は実際にデータが入力された時のみ保存する（選択だけで記録にならないよう）
     if (widget.sessionId == null) {
-      SessionManager.instance.getOrCreate();
-      _triggerSave();
+      _initSession();
+    } else {
+      _resolvedSessionId = widget.sessionId;
+      _loadBodyWeight();
     }
   }
 
-  Future<void> _loadPrevBest() async {
-    final best =
-        await SessionManager.instance.getPreviousBest(widget.exercise.name);
-    if (mounted) setState(() => _prevBestSet = best);
+  void _onTimerChanged() {
+    if (mounted) setState(() {});
   }
 
-  Future<void> _loadRestDuration() async {
-    final saved = await UserPreferences.instance.getRestDuration();
-    if (mounted) {
-      setState(() {
-        _restDurationSec = saved;
-        _restRemainingSec = saved;
-      });
+  Future<void> _initSession() async {
+    final session = await SessionManager.instance.getOrCreate();
+    _resolvedSessionId = session.id;
+    // _triggerSave() はここでは呼ばない（空の種目が記録されるのを防ぐ）
+    _loadBodyWeight();
+  }
+
+  Future<void> _loadBodyWeight() async {
+    double? weight;
+    final active = SessionManager.instance.active;
+    if (active != null && active.id == _resolvedSessionId) {
+      weight = active.bodyWeightKg;
+    } else if (_resolvedSessionId != null) {
+      final sessions = await SessionManager.instance.getAllSessions();
+      final session =
+          sessions.where((s) => s.id == _resolvedSessionId).firstOrNull;
+      weight = session?.bodyWeightKg;
     }
+    weight ??= await UserPreferences.instance.getBodyWeight();
+    if (mounted) setState(() => _bodyWeightKg = weight);
   }
 
-  @override
-  void dispose() {
-    _saveDebounce?.cancel();
-    _tickTimer?.cancel();
-    _restFinishedAutoReset?.cancel();
+  Future<void> _loadUnit() async {
+    final isKg = await UserPreferences.instance.getIsKg();
+    if (mounted) setState(() => _isKg = isKg);
+  }
+
+  Future<void> _loadPrevRecord() async {
+    final record = await SessionManager.instance.getPreviousExerciseRecord(
+      widget.exercise.name,
+      excludeSessionId: widget.sessionId,
+    );
+    if (mounted) setState(() => _prevRecord = record);
+  }
+
+  /// 前回の記録の全セット（重量・回数・メモ）を現在の入力にペーストする。
+  void _pasteFromPrevious() {
+    final prev = _prevRecord;
+    if (prev == null || prev.sets.isEmpty) return;
     for (final c in _weightCtrl) {
       c.dispose();
     }
     for (final c in _repsCtrl) {
       c.dispose();
     }
+    for (final c in _setMemoCtrl) {
+      c.dispose();
+    }
+    final newSets = <WorkoutSet>[];
+    final newWeightCtrl = <TextEditingController>[];
+    final newRepsCtrl = <TextEditingController>[];
+    final newMemoCtrl = <TextEditingController>[];
+    for (int i = 0; i < prev.sets.length; i++) {
+      final ps = prev.sets[i];
+      newSets.add(WorkoutSet(
+        setNumber: i + 1,
+        weight: ps.weight,
+        reps: ps.reps,
+        memo: ps.memo,
+        recordedAt: DateTime.now(),
+      ));
+      newWeightCtrl.add(TextEditingController(text: _formatWeight(ps.weight)));
+      newRepsCtrl
+          .add(TextEditingController(text: ps.reps > 0 ? '${ps.reps}' : ''));
+      newMemoCtrl.add(TextEditingController(text: ps.memo ?? ''));
+    }
+    setState(() {
+      _sets = newSets;
+      _weightCtrl = newWeightCtrl;
+      _repsCtrl = newRepsCtrl;
+      _setMemoCtrl = newMemoCtrl;
+    });
+    _triggerSave();
+  }
+
+  Future<void> _confirmPasteFromPrevious() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cCardLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('前回の記録をペースト',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: context.cText)),
+        content: Text(
+          '現在入力中の全セットが前回の記録（重量・回数・メモ）で上書きされます。よろしいですか？',
+          style: GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('キャンセル',
+                style: GoogleFonts.inter(color: context.cTextSub)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('ペースト',
+                style: GoogleFonts.inter(
+                    color: kPrimary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) _pasteFromPrevious();
+  }
+
+  Future<void> _loadRestDuration() async {
+    final saved = await UserPreferences.instance.getRestDuration();
+    RestTimerService.instance.setDuration(saved);
+  }
+
+  @override
+  void dispose() {
+    RestTimerService.instance.removeListener(_onTimerChanged);
+    RestTimerService.instance.unsuppressOverlay();
+    _saveDebounce?.cancel();
+    _uiRefreshTimer?.cancel();
+    for (final c in _weightCtrl) {
+      c.dispose();
+    }
+    for (final c in _repsCtrl) {
+      c.dispose();
+    }
+    for (final c in _setMemoCtrl) {
+      c.dispose();
+    }
+    _exerciseMemoCtrl.dispose();
     _commitSave();
     super.dispose();
   }
 
-  // ── タイマー処理（休憩タイマー専用） ────────────────────
-
-  void _onTick() {
-    if (!mounted) return;
-    if (_restState != _RestState.running) return;
-    setState(() {
-      _restRemainingSec--;
-      if (_restRemainingSec <= 0) {
-        _restRemainingSec = 0;
-        _restState = _RestState.finished;
-        HapticFeedback.heavyImpact();
-        SystemSound.play(SystemSoundType.alert);
-        _restFinishedAutoReset?.cancel();
-        _restFinishedAutoReset = Timer(const Duration(seconds: 5), () {
-          if (mounted) {
-            setState(() {
-              _restState = _RestState.idle;
-              _restRemainingSec = _restDurationSec;
-            });
-          }
-        });
-      }
-    });
-  }
-
-  void _startRest() {
-    setState(() {
-      _restRemainingSec = _restDurationSec;
-      _restState = _RestState.running;
-    });
-    _tickTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
-  }
-
-  void _pauseRest() {
-    setState(() => _restState = _RestState.paused);
-  }
-
-  void _resumeRest() {
-    setState(() => _restState = _RestState.running);
-    _tickTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
-  }
-
-  void _stopRest() {
-    _restFinishedAutoReset?.cancel();
-    setState(() {
-      _restState = _RestState.idle;
-      _restRemainingSec = _restDurationSec;
-    });
-  }
-
-  Future<void> _showDurationPicker() async {
-    final result = await showModalBottomSheet<int>(
-      context: context,
-      backgroundColor: context.cCardLow,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      isScrollControlled: true,
-      builder: (ctx) => DurationPickerSheet(currentSec: _restDurationSec),
-    );
-    if (result != null && result > 0 && mounted) {
-      setState(() {
-        _restDurationSec = result;
-        if (_restState == _RestState.idle) {
-          _restRemainingSec = result;
-        }
-      });
-      await UserPreferences.instance.setRestDuration(result);
+  /// 重量の表示用フォーマット。整数値は小数点なしで表示し、
+  /// 端数がある場合のみ小数第1位まで表示する（入力自体は小数点対応のまま）。
+  String _formatWeight(double kg) {
+    final displayValue = _isKg ? kg : kg * 2.20462;
+    if (displayValue <= 0) return '';
+    if (displayValue == displayValue.roundToDouble()) {
+      return displayValue.toInt().toString();
     }
+    return displayValue.toStringAsFixed(1);
   }
 
   // ── 自動保存 ────────────────────────────────────────
@@ -193,26 +249,31 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   }
 
   Future<void> _commitSaveAsync() async {
+    // 意味のあるデータがある場合のみ保存（選択しただけでは記録にならない）
+    final hasData = _sets.any((s) =>
+            s.reps > 0 || s.weight > 0 || (s.memo?.isNotEmpty ?? false)) ||
+        _exerciseMemoCtrl.text.trim().isNotEmpty;
+    if (!hasData) return;
+
     final exercise = Exercise(
       name: widget.exercise.name,
       muscleGroup: widget.exercise.muscleGroup,
       sets: List.from(_sets),
+      memo: _exerciseMemoCtrl.text.trim().isEmpty
+          ? null
+          : _exerciseMemoCtrl.text.trim(),
     );
     if (widget.sessionId != null) {
-      // 特定のセッション（過去 or アクティブ）に保存
       await SessionManager.instance
           .saveExerciseToExistingSession(widget.sessionId!, exercise);
     } else {
-      // sessionId 未指定 → アクティブセッションに保存
       await SessionManager.instance.saveExercise(exercise);
     }
-    // Analytics: 種目記録イベント
     unawaited(AnalyticsService.instance.logExerciseRecorded(
       exerciseName: widget.exercise.name,
       setCount: _sets.length,
     ));
 
-    // 匿名統計データ送信（オプトイン時のみ）
     if (_currentMaxRM > 0) {
       final weight = await UserPreferences.instance.getBodyWeight();
       if (weight > 0) {
@@ -241,6 +302,77 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     return _sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
   }
 
+  // ── タイマー設定 ─────────────────────────────────────
+
+  Future<void> _showDurationPicker() async {
+    final timer = RestTimerService.instance;
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: context.cCardLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (ctx) => DurationPickerSheet(currentSec: timer.durationSec),
+    );
+    if (result != null && result > 0 && mounted) {
+      timer.setDuration(result);
+      await UserPreferences.instance.setRestDuration(result);
+    }
+  }
+
+  Future<void> _editBodyWeight() async {
+    if (_resolvedSessionId == null) return;
+    final ctrl = TextEditingController(
+      text: (_bodyWeightKg ?? 0).toStringAsFixed(1),
+    );
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cCardLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('この記録の体重',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: context.cText)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: GoogleFonts.inter(color: context.cText),
+          decoration: InputDecoration(
+            suffixText: 'kg',
+            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
+            enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: context.cBorderSub)),
+            focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: kPrimary)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('キャンセル',
+                style: GoogleFonts.inter(color: context.cTextSub)),
+          ),
+          TextButton(
+            onPressed: () {
+              final v = double.tryParse(ctrl.text);
+              Navigator.pop(ctx, v);
+            },
+            child: Text('保存',
+                style: GoogleFonts.inter(
+                    color: kPrimary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (result != null && result > 0 && mounted) {
+      await SessionManager.instance
+          .updateSessionBodyWeight(_resolvedSessionId!, result);
+      if (mounted) setState(() => _bodyWeightKg = result);
+    }
+  }
+
   // ── ビルド ───────────────────────────────────────────
 
   @override
@@ -250,23 +382,28 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _saveAndPop();
       },
-      child: Scaffold(
-        backgroundColor: context.cBg,
-        appBar: _buildAppBar(),
-        body: Column(
-          children: [
-            _buildStatsCard(),
-            _buildRestTimer(),
-            _buildColumnHeader(),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _sets.length,
-                itemBuilder: (_, i) => _buildSetRow(i),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: context.cBg,
+          appBar: _buildAppBar(),
+          body: Column(
+            children: [
+              _buildStatsCard(),
+              _buildOverallMemo(),
+              _buildRestTimer(),
+              _buildColumnHeader(),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _sets.length,
+                  itemBuilder: (_, i) => _buildSetRow(i),
+                ),
               ),
-            ),
-            _buildBottomBar(),
-          ],
+              _buildBottomBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -302,10 +439,39 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         ],
       ),
       actions: [
+        _buildBodyWeightButton(),
         _buildSaveIndicator(),
         _unitToggle(),
         const SizedBox(width: 4),
       ],
+    );
+  }
+
+  Widget _buildBodyWeightButton() {
+    return GestureDetector(
+      onTap: _editBodyWeight,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _bodyWeightKg != null
+                  ? '${_bodyWeightKg!.toStringAsFixed(0)}kg'
+                  : '--',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: context.cText,
+              ),
+            ),
+            Text(
+              '体重 ✎',
+              style: GoogleFonts.jetBrainsMono(fontSize: 8, color: context.cTextSub),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -334,7 +500,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.white24),
+        border: Border.all(color: context.cBorder),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(children: [
@@ -350,15 +516,13 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         final newIsKg = label == 'kg';
         setState(() => _isKg = newIsKg);
         for (int i = 0; i < _sets.length; i++) {
-          _weightCtrl[i].text = newIsKg
-              ? _sets[i].weight.toStringAsFixed(1)
-              : _sets[i].weightInLbs.toStringAsFixed(1);
+          _weightCtrl[i].text = _formatWeight(_sets[i].weight);
         }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
+          color: active ? context.cCardTop : Colors.transparent,
           borderRadius: BorderRadius.circular(5),
         ),
         child: Text(
@@ -366,7 +530,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           style: GoogleFonts.jetBrainsMono(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: active ? kPrimary : Colors.white,
+            color: active ? kPrimary : context.cTextSub,
           ),
         ),
       ),
@@ -387,26 +551,49 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           Expanded(
             child: Column(
               children: [
-                Text(
-                  '前回のベスト',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9,
-                    color: context.cTextSub,
-                    letterSpacing: 0.5,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '前回の記録',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 9,
+                        color: context.cTextSub,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if (_prevRecord != null && _prevRecord!.sets.isNotEmpty)
+                      GestureDetector(
+                        onTap: _confirmPasteFromPrevious,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Icon(Icons.content_paste,
+                              size: 12, color: kPrimary),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _prevBestSet != null
-                      ? '${_prevBestSet!.weight.toStringAsFixed(1)}kg × ${_prevBestSet!.reps}'
-                      : '--',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color:
-                        _prevBestSet != null ? kPrimaryLight : context.cTextSub,
+                if (_prevRecord != null && _prevRecord!.sets.isNotEmpty)
+                  ..._prevRecord!.sets.take(3).map(
+                        (s) => Text(
+                          '${s.weight.toStringAsFixed(1)}kg × ${s.reps}',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: kPrimaryLight,
+                          ),
+                        ),
+                      )
+                else
+                  Text(
+                    '--',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: context.cTextSub,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -477,13 +664,43 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     );
   }
 
+  // ── 全体メモ ──────────────────────────────────────────
+
+  Widget _buildOverallMemo() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.cCardLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: TextField(
+        controller: _exerciseMemoCtrl,
+        maxLines: null,
+        minLines: 1,
+        style: GoogleFonts.inter(fontSize: 13, color: context.cText),
+        decoration: InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          icon: Icon(Icons.sticky_note_2_outlined,
+              size: 16, color: context.cTextSub),
+          hintText: 'この種目のメモ（フォーム・意識点など）',
+          hintStyle: GoogleFonts.inter(fontSize: 12, color: context.cTextSub),
+        ),
+        onChanged: (_) => _triggerSave(),
+      ),
+    );
+  }
+
   // ── 休憩タイマー ──────────────────────────────────────
 
   Widget _buildRestTimer() {
-    final isRunning = _restState == _RestState.running;
-    final isPaused = _restState == _RestState.paused;
-    final isFinished = _restState == _RestState.finished;
-    final isIdle = _restState == _RestState.idle;
+    final timer = RestTimerService.instance;
+    final isRunning = timer.state == RestState.running;
+    final isPaused  = timer.state == RestState.paused;
+    final isFinished = timer.state == RestState.finished;
+    final isIdle    = timer.state == RestState.idle;
 
     final borderColor = isFinished
         ? kTertiary
@@ -526,6 +743,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   }
 
   List<Widget> _restIdleContent() {
+    final timer = RestTimerService.instance;
     return [
       Text(
         '休憩タイマー',
@@ -539,8 +757,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       GestureDetector(
         onTap: _showDurationPicker,
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: context.cCardHigh,
             borderRadius: BorderRadius.circular(6),
@@ -549,7 +766,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                formatMMSS(_restDurationSec),
+                formatMMSS(timer.durationSec),
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -557,18 +774,16 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 ),
               ),
               const SizedBox(width: 2),
-              Icon(Icons.expand_more,
-                  size: 14, color: context.cTextSub),
+              Icon(Icons.expand_more, size: 14, color: context.cTextSub),
             ],
           ),
         ),
       ),
       const Spacer(),
       GestureDetector(
-        onTap: _startRest,
+        onTap: () => RestTimerService.instance.start(),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: kSecondary,
             borderRadius: BorderRadius.circular(8),
@@ -576,8 +791,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.play_arrow,
-                  color: Colors.white, size: 14),
+              const Icon(Icons.play_arrow, color: Colors.white, size: 14),
               const SizedBox(width: 2),
               Text(
                 'START',
@@ -596,9 +810,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   }
 
   List<Widget> _restRunningContent(bool isPaused) {
+    final remaining = RestTimerService.instance.remainingSec;
     return [
       Text(
-        formatMMSS(_restRemainingSec),
+        formatMMSS(remaining),
         style: GoogleFonts.jetBrainsMono(
           fontSize: 22,
           fontWeight: FontWeight.w800,
@@ -617,7 +832,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       const Spacer(),
       GestureDetector(
-        onTap: isPaused ? _resumeRest : _pauseRest,
+        onTap: isPaused
+            ? () => RestTimerService.instance.resume()
+            : () => RestTimerService.instance.pause(),
         child: Container(
           width: 34,
           height: 34,
@@ -634,7 +851,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         ),
       ),
       GestureDetector(
-        onTap: _stopRest,
+        onTap: () => RestTimerService.instance.stop(),
         child: Container(
           width: 34,
           height: 34,
@@ -660,10 +877,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       const Spacer(),
       GestureDetector(
-        onTap: _stopRest,
+        onTap: () => RestTimerService.instance.stop(),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: kTertiary,
             borderRadius: BorderRadius.circular(8),
@@ -703,7 +919,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Text('回数',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.jetBrainsMono(
@@ -711,7 +927,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text('1RM推定',
                 textAlign: TextAlign.right,
                 style: GoogleFonts.jetBrainsMono(
@@ -733,98 +949,89 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          SizedBox(
-            width: 28,
-            child: Text(
-              '${s.setNumber}',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: kPrimary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: _numInput(
-              controller: _weightCtrl[i],
-              onChanged: (v) {
-                final parsed = double.tryParse(v);
-                if (parsed != null) {
-                  s.weight = _isKg ? parsed : parsed / 2.20462;
-                  s.recordedAt = DateTime.now();
-                }
-              },
-              onDone: () {
-                setState(() {});
-                _triggerSave();
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: _numInput(
-              controller: _repsCtrl[i],
-              onChanged: (v) {
-                final parsed = int.tryParse(v);
-                if (parsed != null) {
-                  s.reps = parsed;
-                  s.recordedAt = DateTime.now();
-                }
-              },
-              onDone: () {
-                setState(() {});
-                _triggerSave();
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 4,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: kTertiary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
+          Row(
+            children: [
+              // SET番号
+              SizedBox(
+                width: 28,
                 child: Text(
-                  '${s.oneRM.toStringAsFixed(1)}kg',
+                  '${s.setNumber}',
+                  textAlign: TextAlign.center,
                   style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: kTertiary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kPrimary,
                   ),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              // 重量入力（小さめ）
+              Expanded(
+                flex: 3,
+                child: _weightInput(i),
+              ),
+              const SizedBox(width: 8),
+              // 回数 ± カウンター（キーボード入力も可）
+              Expanded(
+                flex: 4,
+                child: _repsCounter(i),
+              ),
+              const SizedBox(width: 8),
+              // 1RM推定
+              Expanded(
+                flex: 3,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: kTertiary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${s.oneRM.toStringAsFixed(1)}kg',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: kTertiary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // 削除ボタン
+              SizedBox(
+                width: 28,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: 16,
+                  onPressed: () => _removeSet(i),
+                  icon: Icon(Icons.close, color: context.cBorder),
+                ),
+              ),
+            ],
           ),
-          SizedBox(
-            width: 28,
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              iconSize: 16,
-              onPressed: () {
-                _weightCtrl[i].dispose();
-                _weightCtrl.removeAt(i);
-                _repsCtrl[i].dispose();
-                _repsCtrl.removeAt(i);
-                setState(() {
-                  _sets.removeAt(i);
-                  for (int j = 0; j < _sets.length; j++) {
-                    _sets[j].setNumber = j + 1;
-                  }
-                });
+          const SizedBox(height: 6),
+          // セットメモ（重量・回数入力欄の下に配置）
+          Padding(
+            padding: const EdgeInsets.only(left: 28),
+            child: TextField(
+              controller: _setMemoCtrl[i],
+              style: GoogleFonts.inter(fontSize: 11, color: context.cTextSub),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'セットメモ',
+                hintStyle:
+                    GoogleFonts.inter(fontSize: 11, color: context.cTextSub.withValues(alpha: 0.5)),
+              ),
+              onChanged: (v) {
+                _sets[i].memo = v.trim().isEmpty ? null : v.trim();
                 _triggerSave();
               },
-              icon: Icon(Icons.close, color: context.cBorder),
             ),
           ),
         ],
@@ -832,17 +1039,29 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     );
   }
 
-  Widget _numInput({
-    required TextEditingController controller,
-    required ValueChanged<String> onChanged,
-    required VoidCallback onDone,
-  }) {
+  void _removeSet(int i) {
+    _weightCtrl[i].dispose();
+    _weightCtrl.removeAt(i);
+    _repsCtrl[i].dispose();
+    _repsCtrl.removeAt(i);
+    _setMemoCtrl[i].dispose();
+    _setMemoCtrl.removeAt(i);
+    setState(() {
+      _sets.removeAt(i);
+      for (int j = 0; j < _sets.length; j++) {
+        _sets[j].setNumber = j + 1;
+      }
+    });
+    _triggerSave();
+  }
+
+  Widget _weightInput(int i) {
     return TextField(
-      controller: controller,
+      controller: _weightCtrl[i],
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textAlign: TextAlign.center,
       style: GoogleFonts.jetBrainsMono(
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: FontWeight.w700,
         color: kPrimary,
       ),
@@ -859,11 +1078,101 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         ),
         isDense: true,
         contentPadding:
-            const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       ),
-      onChanged: onChanged,
-      onSubmitted: (_) => onDone(),
-      onEditingComplete: onDone,
+      onChanged: (v) {
+        final parsed = double.tryParse(v);
+        if (parsed != null) {
+          setState(() {
+            _sets[i].weight = _isKg ? parsed : parsed / 2.20462;
+            _sets[i].recordedAt = DateTime.now();
+          });
+        }
+      },
+      onSubmitted: (_) => _triggerSave(),
+      onEditingComplete: _triggerSave,
+    );
+  }
+
+  Widget _repsCounter(int i) {
+    final reps = _sets[i].reps;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _counterBtn(
+          icon: Icons.remove,
+          onTap: reps > 0 ? () => _setReps(i, reps - 1) : null,
+        ),
+        SizedBox(
+          width: 36,
+          child: TextField(
+            controller: _repsCtrl[i],
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: reps > 0 ? kPrimary : context.cTextSub,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (v) {
+              final parsed = int.tryParse(v);
+              if (parsed != null) {
+                setState(() {
+                  _sets[i].reps = parsed;
+                  _sets[i].recordedAt = DateTime.now();
+                });
+              }
+            },
+            onSubmitted: (_) => _triggerSave(),
+            onEditingComplete: _triggerSave,
+          ),
+        ),
+        _counterBtn(
+          icon: Icons.add,
+          onTap: () => _setReps(i, reps + 1),
+        ),
+      ],
+    );
+  }
+
+  void _setReps(int i, int value) {
+    setState(() {
+      _sets[i].reps = value;
+      _sets[i].recordedAt = DateTime.now();
+      _repsCtrl[i].text = '$value';
+    });
+    _triggerSave();
+  }
+
+  Widget _counterBtn({
+    required IconData icon,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: onTap != null
+              ? context.cCardTop.withValues(alpha: 0.5)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: onTap != null ? context.cBorderSub : Colors.transparent,
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: onTap != null ? context.cText : context.cTextSub.withValues(alpha: 0.3),
+        ),
+      ),
     );
   }
 
@@ -951,20 +1260,15 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     final initReps = prevSet?.reps ?? 0;
     final newSet =
         WorkoutSet(setNumber: num, weight: initWeight, reps: initReps);
-    final weightText = initWeight > 0
-        ? (_isKg
-            ? initWeight.toStringAsFixed(1)
-            : (initWeight * 2.20462).toStringAsFixed(1))
-        : '';
-    _weightCtrl.add(TextEditingController(text: weightText));
+    _weightCtrl.add(TextEditingController(text: _formatWeight(initWeight)));
     _repsCtrl.add(TextEditingController(text: initReps > 0 ? '$initReps' : ''));
+    _setMemoCtrl.add(TextEditingController());
     setState(() => _sets.add(newSet));
     _triggerSave();
   }
 
   Future<void> _showAddNextExercise() async {
     _commitSave();
-    // 現在のセッションを特定（sessionId 指定がなければアクティブセッション）
     final targetSession = widget.sessionId != null
         ? (await SessionManager.instance.getAllSessions())
             .where((s) => s.id == widget.sessionId)
@@ -975,6 +1279,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       targetSession?.exercises.map((e) => e.name) ?? [],
     );
     if (!mounted) return;
+    final routineNames = SessionManager.instance.routineExerciseNames;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -983,13 +1288,14 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         title: '次の種目を選択',
         markedNames: doneNames,
         headerSlot: _buildSessionPreview(targetSession),
+        priorityNames: routineNames,
+        allowMarkedTap: true,
         onSelected: (exercise) {
           final existingEx = targetSession?.exercises
               .where((e) => e.name == exercise.name)
               .firstOrNull;
 
           if (existingEx != null && targetSession != null) {
-            // 同じセッション内の既存種目 → そのまま編集
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -1000,7 +1306,6 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               ),
             );
           } else {
-            // 新規種目 → 同じセッションIDを引き継ぐ
             Navigator.push(
               context,
               MaterialPageRoute(

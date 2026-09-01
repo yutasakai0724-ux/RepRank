@@ -15,13 +15,17 @@ import 'services/session_manager.dart';
 import 'services/user_preferences.dart';
 import 'screens/analysis_screen.dart';
 import 'screens/privacy_consent_screen.dart';
+import 'screens/tutorial_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/exercise_record_screen.dart';
 import 'screens/routines_screen.dart';
 import 'screens/profile_screen.dart';
 import 'widgets/exercise_picker_sheet.dart';
 import 'widgets/banner_ad_widget.dart';
+import 'widgets/rest_timer_overlay.dart';
 import 'services/app_settings.dart';
+import 'services/notification_service.dart';
+import 'services/live_activity_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +33,8 @@ void main() async {
   await FirebaseInit.initialize();
   await AdService.instance.initialize();
   await AppSettings.instance.load();
+  await NotificationService.instance.initialize();
+  await LiveActivityService.instance.initialize();
 
   // 初期リポジトリ（SQLiteのみ）で起動
   final local = SqliteWorkoutRepository(DatabaseHelper.instance);
@@ -92,7 +98,12 @@ class _MyAppState extends State<MyApp> {
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(AppSettings.instance.textScale),
         ),
-        child: child!,
+        child: Stack(
+          children: [
+            child!,
+            const RestTimerOverlay(),
+          ],
+        ),
       ),
       home: const _AuthGate(),
     );
@@ -113,7 +124,10 @@ class _AuthGateState extends State<_AuthGate> {
   void initState() {
     super.initState();
     AuthService.instance.authStateChanges.listen(_onAuthChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPrivacyConsent());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkPrivacyConsent();
+      await _checkTutorial();
+    });
   }
 
   Future<void> _onAuthChanged(User? user) async {
@@ -128,9 +142,20 @@ class _AuthGateState extends State<_AuthGate> {
   Future<void> _checkPrivacyConsent() async {
     final consented = await UserPreferences.instance.hasConsentedToPrivacy();
     if (consented || !mounted) return;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const PrivacyConsentScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  Future<void> _checkTutorial() async {
+    final seen = await UserPreferences.instance.hasTutorialSeen();
+    if (seen || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const TutorialScreen(),
         fullscreenDialog: true,
       ),
     );

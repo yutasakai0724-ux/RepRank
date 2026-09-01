@@ -26,6 +26,7 @@ class WorkoutSet {
   double weight;
   int reps;
   DateTime? recordedAt;
+  String? memo;
 
   WorkoutSet({
     String? id,
@@ -33,6 +34,7 @@ class WorkoutSet {
     this.weight = 0.0,
     this.reps = 0,
     this.recordedAt,
+    this.memo,
   }) : id = id ?? _uuid.v4();
 
   double get oneRM {
@@ -48,6 +50,7 @@ class WorkoutSet {
     'weight': weight,
     'reps': reps,
     'recordedAt': recordedAt?.toIso8601String(),
+    'memo': memo,
   };
 
   factory WorkoutSet.fromJson(Map<String, dynamic> j) => WorkoutSet(
@@ -58,6 +61,7 @@ class WorkoutSet {
     recordedAt: j['recordedAt'] != null
         ? DateTime.parse(j['recordedAt'] as String)
         : null,
+    memo: j['memo'] as String?,
   );
 }
 
@@ -67,12 +71,14 @@ class Exercise {
   String name;
   MuscleGroup muscleGroup;
   List<WorkoutSet> sets;
+  String? memo;
 
   Exercise({
     String? id,
     required this.name,
     required this.muscleGroup,
     List<WorkoutSet>? sets,
+    this.memo,
   }) : id = id ?? _uuid.v4(),
        sets = sets ?? [];
 
@@ -81,6 +87,7 @@ class Exercise {
     'name': name,
     'muscleGroup': muscleGroup.name,
     'sets': sets.map((s) => s.toJson()).toList(),
+    'memo': memo,
   };
 
   factory Exercise.fromJson(Map<String, dynamic> j) => Exercise(
@@ -93,6 +100,7 @@ class Exercise {
     sets: (j['sets'] as List)
         .map((s) => WorkoutSet.fromJson(s as Map<String, dynamic>))
         .toList(),
+    memo: j['memo'] as String?,
   );
 }
 
@@ -105,6 +113,7 @@ class WorkoutSession {
   DateTime startedAt;
   DateTime? finishedAt;
   List<Exercise> exercises;
+  double? bodyWeightKg;
 
   WorkoutSession({
     String? id,
@@ -114,6 +123,7 @@ class WorkoutSession {
     required this.startedAt,
     this.finishedAt,
     List<Exercise>? exercises,
+    this.bodyWeightKg,
   }) : id = id ?? _uuid.v4(),
        exercises = exercises ?? [];
 
@@ -137,6 +147,7 @@ class WorkoutSession {
     'startedAt': startedAt.toIso8601String(),
     'finishedAt': finishedAt?.toIso8601String(),
     'exercises': exercises.map((e) => e.toJson()).toList(),
+    'bodyWeightKg': bodyWeightKg,
   };
 
   factory WorkoutSession.fromJson(Map<String, dynamic> j) => WorkoutSession(
@@ -151,6 +162,7 @@ class WorkoutSession {
     exercises: (j['exercises'] as List)
         .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
         .toList(),
+    bodyWeightKg: (j['bodyWeightKg'] as num?)?.toDouble(),
   );
 }
 

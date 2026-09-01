@@ -21,21 +21,21 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
     _loadAd();
   }
 
-  void _loadAd() {
+  Future<void> _loadAd() async {
+    await AdService.instance.initialize();
     final ad = AdService.instance.createBanner(
+      onLoaded: (ad) {
+        if (mounted) setState(() => _loaded = true);
+      },
       onFailedToLoad: (ad, error) {
+        // ignore: avoid_print
+        print('[BannerAd] FAILED: $error');
         ad.dispose();
         if (mounted) setState(() => _loaded = false);
       },
     );
-    ad.load().then((_) {
-      if (mounted) {
-        setState(() {
-          _ad = ad;
-          _loaded = true;
-        });
-      }
-    });
+    _ad = ad;
+    ad.load();
   }
 
   @override

@@ -95,11 +95,21 @@ class AuthService {
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      // 匿名ユーザーがいれば昇格
+      // 匿名ユーザーがいれば昇格を試みる
       if (currentUser?.isAnonymous == true) {
-        final cred = await currentUser!.linkWithCredential(credential);
-        debugPrint('[Auth] anonymous linked to Google: ${cred.user?.uid}');
-        return cred.user;
+        try {
+          final cred = await currentUser!.linkWithCredential(credential);
+          debugPrint('[Auth] anonymous linked to Google: ${cred.user?.uid}');
+          return cred.user;
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use') {
+            // すでに別アカウントに紐付け済み → そのアカウントでサインイン
+            final cred = await _auth!.signInWithCredential(credential);
+            debugPrint('[Auth] Google sign-in (existing): ${cred.user?.uid}');
+            return cred.user;
+          }
+          rethrow;
+        }
       }
       final cred = await _auth!.signInWithCredential(credential);
       debugPrint('[Auth] Google sign-in: ${cred.user?.uid}');
@@ -109,7 +119,7 @@ class AuthService {
       rethrow;
     } catch (e) {
       debugPrint('[Auth] Google sign-in error: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -118,32 +128,82 @@ class AuthService {
   Future<User?> signInWithApple() async {
     if (!FirebaseInit.isReady) return null;
     try {
-      final appleCredential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-      );
-      final oauthCredential = OAuthProvider('apple.com').credential(
-        idToken: appleCredential.identityToken,
-        accessToken: appleCredential.authorizationCode,
-      );
-      // 匿名ユーザーがいれば昇格
-      if (currentUser?.isAnonymous == true) {
-        final cred = await currentUser!.linkWithCredential(oauthCredential);
-        debugPrint('[Auth] anonymous linked to Apple: ${cred.user?.uid}');
+      if (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS) {
+        // iOS/macOS: ネイティブフロー
+        final appleCredential = await SignInWithApple.getAppleIDCredential(
+          scopes: [
+            AppleIDAuthorizationScopes.email,
+            AppleIDAuthorizationScopes.fullName,
+          ],
+        );
+        final oauthCredential = OAuthProvider('apple.com').credential(
+          idToken: appleCredential.identityToken,
+          accessToken: appleCredential.authorizationCode,
+        );
+        return await _signInWithCredential(oauthCredential, 'Apple');
+      } else {
+        // Android: Webリダイレクトフロー
+        final provider = OAuthProvider('apple.com')
+          ..addScope('email')
+          ..addScope('name');
+        UserCredential cred;
+        if (currentUser?.isAnonymous == true) {
+          try {
+            cred = await currentUser!.linkWithProvider(provider);
+          } on FirebaseAuthException catch (e) {
+            if (e.code == 'credential-already-in-use') {
+              cred = await _auth!.signInWithProvider(provider);
+            } else {
+              rethrow;
+            }
+          }
+        } else {
+          cred = await _auth!.signInWithProvider(provider);
+        }
+        debugPrint('[Auth] Apple sign-in (Android): ${cred.user?.uid}');
         return cred.user;
       }
-      final cred = await _auth!.signInWithCredential(oauthCredential);
-      debugPrint('[Auth] Apple sign-in: ${cred.user?.uid}');
-      return cred.user;
     } on FirebaseAuthException catch (e) {
       debugPrint('[Auth] Apple sign-in failed: ${e.code}');
       rethrow;
     } catch (e) {
       debugPrint('[Auth] Apple sign-in error: $e');
-      return null;
+      rethrow;
     }
+  }
+
+  Future<User?> _signInWithCredential(OAuthCredential credential, String provider) async {
+    if (currentUser?.isAnonymous == true) {
+      try {
+        final cred = await currentUser!.linkWithCredential(credential);
+        debugPrint('[Auth] anonymous linked to $provider: ${cred.user?.uid}');
+        return cred.user;
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use') {
+          final cred = await _auth!.signInWithCredential(credential);
+          debugPrint('[Auth] $provider sign-in (existing): ${cred.user?.uid}');
+          return cred.user;
+        }
+        rethrow;
+      }
+    }
+    final cred = await _auth!.signInWithCredential(credential);
+    debugPrint('[Auth] $provider sign-in: ${cred.user?.uid}');
+    return cred.user;
+  }
+
+  // ── アカウント削除 ─────────────────────────────────────────────
+
+  Future<void> deleteAccount() async {
+    if (!FirebaseInit.isReady) return;
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
+    await user.delete();
+    debugPrint('[Auth] account deleted');
   }
 
   // ── サインアウト ───────────────────────────────────────────────

@@ -205,14 +205,18 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
             child: GestureDetector(
               onTap: _isEditMode
                   ? null
-                  : () => Navigator.push(
+                  : () {
+                      SessionManager.instance.routineExerciseNames =
+                          List.from(_exerciseNames);
+                      Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => ExerciseRecordScreen(
                             exercise: Exercise(name: name, muscleGroup: _group),
                           ),
                         ),
-                      ),
+                      );
+                    },
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -254,7 +258,10 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           if (_isEditMode) ...[
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => setState(() => _exerciseNames.remove(name)),
+              onTap: () => setState(() {
+                    _exerciseNames.remove(name);
+                    widget.routine['exercises'] = List<String>.from(_exerciseNames);
+                  }),
               child: Container(
                 width: 36,
                 height: 36,
@@ -311,7 +318,10 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         title: '種目を追加',
         markedNames: Set<String>.from(_exerciseNames),
         onSelected: (exercise) {
-          setState(() => _exerciseNames.add(exercise.name));
+          setState(() {
+            _exerciseNames.add(exercise.name);
+            widget.routine['exercises'] = List<String>.from(_exerciseNames);
+          });
         },
       ),
     );
@@ -358,14 +368,15 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     );
   }
 
-  void _startWorkout() {
+  Future<void> _startWorkout() async {
     if (_exerciseNames.isEmpty) return;
     // 新しいセッションをルーティン名付きで開始
     SessionManager.instance.reset();
-    SessionManager.instance.getOrCreate(
+    await SessionManager.instance.getOrCreate(
       sessionName: _routineName,
       routineName: _routineName,
     );
+    SessionManager.instance.routineExerciseNames = List.from(_exerciseNames);
     Navigator.push(
       context,
       MaterialPageRoute(

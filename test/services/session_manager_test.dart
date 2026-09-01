@@ -51,20 +51,20 @@ void main() {
 
   // ── getOrCreate ─────────────────────────────────────────────────
   group('getOrCreate', () {
-    test('creates new session when none exists', () {
-      final session = SessionManager.instance.getOrCreate();
+    test('creates new session when none exists', () async {
+      final session = await SessionManager.instance.getOrCreate();
       expect(session, isNotNull);
       expect(session.id, isNotEmpty);
     });
 
-    test('returns same session on repeated calls', () {
-      final a = SessionManager.instance.getOrCreate();
-      final b = SessionManager.instance.getOrCreate();
+    test('returns same session on repeated calls', () async {
+      final a = await SessionManager.instance.getOrCreate();
+      final b = await SessionManager.instance.getOrCreate();
       expect(a.id, equals(b.id));
     });
 
-    test('stores sessionName and routineName', () {
-      final session = SessionManager.instance.getOrCreate(
+    test('stores sessionName and routineName', () async {
+      final session = await SessionManager.instance.getOrCreate(
         sessionName: '胸の日',
         routineName: '胸の日',
       );

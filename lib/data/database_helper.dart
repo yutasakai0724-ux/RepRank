@@ -16,7 +16,7 @@ class DatabaseHelper {
     final path = join(await getDatabasesPath(), 'reprank_v1.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE sessions (
@@ -26,9 +26,15 @@ class DatabaseHelper {
             date        TEXT NOT NULL,
             started_at  TEXT NOT NULL,
             finished_at TEXT,
-            exercises_json TEXT NOT NULL DEFAULT '[]'
+            exercises_json TEXT NOT NULL DEFAULT '[]',
+            body_weight_kg REAL
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE sessions ADD COLUMN body_weight_kg REAL');
+        }
       },
     );
   }

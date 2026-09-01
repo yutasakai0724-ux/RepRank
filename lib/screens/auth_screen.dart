@@ -57,6 +57,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (user != null && mounted) Navigator.of(context).pop();
     } on FirebaseAuthException catch (e) {
       if (mounted) setState(() => _errorMsg = AuthService.errorMessage(e));
+    } catch (e) {
+      if (mounted) setState(() => _errorMsg = 'Google エラー: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

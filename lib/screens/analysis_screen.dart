@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -39,6 +40,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   void initState() {
     super.initState();
     _loadData();
+    SessionManager.instance.addListener(_onSessionChanged);
     _startStopwatchTick();
     _pulseController = AnimationController(
       vsync: this,
@@ -47,8 +49,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     _loadRewardedAd();
   }
 
+  void _onSessionChanged() => _loadData();
+
   @override
   void dispose() {
+    SessionManager.instance.removeListener(_onSessionChanged);
     _stopwatchTimer?.cancel();
     _pulseController.dispose();
     _rewardedAd?.dispose();
@@ -174,6 +179,24 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return list.first;
   }
 
+  // 体重推移（日付ごと、記録が入力された日の体重値を使用）
+  List<({String date, double weight})> get _bodyWeightHistory {
+    final Map<String, double> byDate = {};
+    final allSessions = [
+      ..._allSessions,
+      if (SessionManager.instance.active != null)
+        SessionManager.instance.active!,
+    ];
+    for (final s in allSessions) {
+      if (s.bodyWeightKg == null || s.exercises.isEmpty) continue;
+      final key = formatYMD(s.date);
+      byDate[key] = s.bodyWeightKg!;
+    }
+    final list = byDate.entries.map((e) => (date: e.key, weight: e.value)).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return list;
+  }
+
   // 部位カバレッジ
   Set<MuscleGroup> get _coveredGroups {
     final exercises = <Exercise>[
@@ -297,10 +320,159 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   _buildExerciseGrid(summaries),
                 ],
                 const SizedBox(height: 24),
+                _buildSectionHeader('体重推移'),
+                const SizedBox(height: 10),
+                _buildBodyWeightChart(),
+                const SizedBox(height: 24),
                 _buildSupportAdButton(),
                 const SizedBox(height: 8),
               ],
             ),
+    );
+  }
+
+  // ── 体重推移グラフ ─────────────────────────────────────
+  Widget _buildBodyWeightChart() {
+    final history = _bodyWeightHistory;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        color: context.cCardLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '記録日の体重値',
+            style: GoogleFonts.jetBrainsMono(
+                fontSize: 10, color: context.cTextSub.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 16),
+          if (history.length < 2)
+            SizedBox(
+              height: 100,
+              child: Center(
+                child: Text(
+                  'データが不足しています',
+                  style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11, color: context.cTextSub),
+                ),
+              ),
+            )
+          else
+            _buildBodyWeightLineChart(history),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBodyWeightLineChart(
+      List<({String date, double weight})> history) {
+    final spots = history
+        .asMap()
+        .entries
+        .map((e) => FlSpot(e.key.toDouble(), e.value.weight))
+        .toList();
+    final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 1;
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 1;
+
+    return SizedBox(
+      height: 140,
+      child: LineChart(LineChartData(
+        minX: 0,
+        maxX: (history.length - 1).toDouble(),
+        minY: minY,
+        maxY: maxY,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) => FlLine(
+              color: Colors.white.withValues(alpha: 0.06), strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 36,
+              getTitlesWidget: (v, _) => Text(
+                v.toStringAsFixed(0),
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 9, color: context.cTextSub),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              interval:
+                  history.length <= 6 ? 1 : (history.length / 4).ceilToDouble(),
+              getTitlesWidget: (v, _) {
+                final idx = v.toInt();
+                if (idx < 0 || idx >= history.length) {
+                  return const SizedBox.shrink();
+                }
+                final parts = history[idx].date.split('-');
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('${parts[1]}/${parts[2]}',
+                      style: GoogleFonts.jetBrainsMono(
+                          fontSize: 9, color: context.cTextSub)),
+                );
+              },
+            ),
+          ),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.35,
+            color: kPrimary,
+            barWidth: 2.5,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                radius: 4,
+                color: kPrimary,
+                strokeWidth: 2,
+                strokeColor: context.cCardLow,
+              ),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [
+                  kPrimary.withValues(alpha: 0.18),
+                  kPrimary.withValues(alpha: 0.0),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (_) => context.cCardHigh,
+            getTooltipItems: (spots) => spots
+                .map((s) => LineTooltipItem(
+                      '${s.y.toStringAsFixed(1)}kg',
+                      GoogleFonts.jetBrainsMono(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: kPrimary),
+                    ))
+                .toList(),
+          ),
+        ),
+      )),
     );
   }
 
@@ -537,7 +709,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border:
-            Border.all(color: topTier.color.withValues(alpha: 0.25)),
+            Border.all(color: topTier.colorForContext(context).withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
@@ -556,7 +728,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   style: GoogleFonts.inter(
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
-                    color: topTier.color,
+                    color: topTier.colorForContext(context),
                     letterSpacing: -1,
                     height: 1,
                   ),
@@ -586,12 +758,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: topTier.color.withValues(alpha: 0.1),
+              color: topTier.colorForContext(context).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: topTier.color.withValues(alpha: 0.25)),
+                  color: topTier.colorForContext(context).withValues(alpha: 0.25)),
             ),
-            child: Icon(_tierIcon(topTier), color: topTier.color, size: 36),
+            child: Icon(_tierIcon(topTier), color: topTier.colorForContext(context), size: 36),
           ),
         ],
       ),
@@ -700,7 +872,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       decoration: BoxDecoration(
         color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: nextTier.color.withValues(alpha: 0.2)),
+        border: Border.all(color: nextTier.colorForContext(context).withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,11 +889,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: nextTier.color.withValues(alpha: 0.1),
+                  color: nextTier.colorForContext(context).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.flag_outlined,
-                    color: nextTier.color, size: 22),
+                    color: nextTier.colorForContext(context), size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -751,7 +923,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     style: GoogleFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: nextTier.color,
+                      color: nextTier.colorForContext(context),
                       height: 1,
                     ),
                   ),
@@ -771,7 +943,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               value: s.result.progressInTier,
               minHeight: 6,
               backgroundColor: context.cCardHigh,
-              valueColor: AlwaysStoppedAnimation(nextTier.color),
+              valueColor: AlwaysStoppedAnimation(nextTier.colorForContext(context)),
             ),
           ),
         ],
@@ -820,7 +992,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         decoration: BoxDecoration(
           color: context.cCardLow,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: tier.color.withValues(alpha: 0.15)),
+          border: Border.all(color: tier.colorForContext(context).withValues(alpha: 0.15)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,12 +1003,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               children: [
                 Icon(_groupIcon(s.exercise.muscleGroup),
                     size: 16,
-                    color: tier.color.withValues(alpha: 0.8)),
+                    color: tier.colorForContext(context).withValues(alpha: 0.8)),
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: tier.color.withValues(alpha: 0.12),
+                    color: tier.colorForContext(context).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -844,7 +1016,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
-                      color: tier.color,
+                      color: tier.colorForContext(context),
                     ),
                   ),
                 ),

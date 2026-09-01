@@ -1,3 +1,6 @@
+import 'live_activity_service.dart';
+import 'notification_service.dart';
+
 /// 単純なストップウォッチサービス（シングルトン）。
 /// セッション状態とは完全に独立して動作する。
 /// 画面が破棄されても状態が保持されるよう、シングルトンで管理。
@@ -23,6 +26,10 @@ class StopwatchService {
     if (_isRunning) return;
     _isRunning = true;
     _runStartTime = DateTime.now();
+    // 通知の chronometer は累積時間も考慮した仮想開始時刻を基準にする
+    final virtualStart = DateTime.now().subtract(_accumulated);
+    NotificationService.instance.showStopwatchOngoing(virtualStart);
+    LiveActivityService.instance.startStopwatch(virtualStart);
   }
 
   void stop() {
@@ -30,11 +37,15 @@ class StopwatchService {
     _accumulated += DateTime.now().difference(_runStartTime!);
     _isRunning = false;
     _runStartTime = null;
+    NotificationService.instance.cancelStopwatchOngoing();
+    LiveActivityService.instance.endStopwatch();
   }
 
   void reset() {
     _isRunning = false;
     _runStartTime = null;
     _accumulated = Duration.zero;
+    NotificationService.instance.cancelStopwatchOngoing();
+    LiveActivityService.instance.endStopwatch();
   }
 }

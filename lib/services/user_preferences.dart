@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/workout.dart';
 
@@ -85,8 +86,24 @@ class UserPreferences {
   Future<void> addCustomExercise(String name, MuscleGroup group) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_keyCustomExercises) ?? [];
-    raw.add('$name|${group.name}');
-    await prefs.setStringList(_keyCustomExercises, raw);
+    if (!raw.any((s) => s.startsWith('$name|'))) {
+      raw.add('$name|${group.name}');
+      await prefs.setStringList(_keyCustomExercises, raw);
+    }
+  }
+
+  // ── チュートリアル表示済みフラグ ─────────────────────────────
+
+  static const _keyTutorialSeen = 'tutorial_seen';
+
+  Future<bool> hasTutorialSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyTutorialSeen) ?? false;
+  }
+
+  Future<void> setTutorialSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyTutorialSeen, true);
   }
 
   // ── プライバシーポリシー同意済みフラグ ──────────────────────
@@ -120,6 +137,85 @@ class UserPreferences {
     } else {
       await prefs.setString(_keyProfileImagePath, path);
     }
+  }
+
+  // ── kg/lbs 単位設定 ────────────────────────────────────────
+
+  static const _keyIsKg = 'is_kg_unit';
+
+  Future<bool> getIsKg() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyIsKg) ?? true;
+  }
+
+  Future<void> setIsKg(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyIsKg, value);
+  }
+
+  // ── ルーチン永続化 ─────────────────────────────────────────
+
+  static const _keyRoutines = 'routines_v1';
+
+  Future<List<Map<String, dynamic>>> getRoutines() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_keyRoutines) ?? [];
+    final result = <Map<String, dynamic>>[];
+    for (final s in raw) {
+      try {
+        final decoded = jsonDecode(s) as Map<String, dynamic>;
+        final group = MuscleGroup.values.firstWhere(
+          (g) => g.name == decoded['group'],
+          orElse: () => MuscleGroup.chest,
+        );
+        result.add({
+          'name': decoded['name'] as String,
+          'duration': decoded['duration'] as String? ?? '—',
+          'group': group,
+          'exercises': List<String>.from(decoded['exercises'] as List? ?? []),
+        });
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  Future<void> saveRoutines(List<Map<String, dynamic>> routines) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = routines.map((r) => jsonEncode({
+      'name': r['name'],
+      'duration': r['duration'],
+      'group': (r['group'] as MuscleGroup).name,
+      'exercises': r['exercises'],
+    })).toList();
+    await prefs.setStringList(_keyRoutines, raw);
+  }
+
+  // ── お気に入り種目 ─────────────────────────────────────────
+
+  static const _keyFavoriteExercises = 'favorite_exercises';
+
+  Future<Set<String>> getFavoriteExercises() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_keyFavoriteExercises) ?? []).toSet();
+  }
+
+  Future<void> setFavoriteExercises(Set<String> names) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_keyFavoriteExercises, names.toList());
+  }
+
+  // ── 休憩タイマー通知 ──────────────────────────────────────────
+
+  static const _keyRestNotification = 'rest_notification_enabled';
+
+  Future<bool> getRestNotification() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyRestNotification) ?? false;
+  }
+
+  Future<void> setRestNotification(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyRestNotification, value);
   }
 
   // ── 匿名統計データの共有許可 ────────────────────────────────

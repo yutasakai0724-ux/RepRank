@@ -27,8 +27,8 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   double _bodyWeight = 70.0;
   String _gender = '男性';
   late StrengthResult _result;
-  // 1RM 推移データ: {date → maxOneRM}
   List<_RMPoint> _history = [];
+  List<_VolumePoint> _volumeHistory = [];
 
   @override
   void initState() {
@@ -52,21 +52,36 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   Future<void> _loadHistory() async {
     final sessions = await SessionManager.instance.getAllSessions();
     final Map<String, double> byDate = {};
+    final Map<String, double?> bwByDate = {};
+    final Map<String, double> volByDate = {};
     for (final s in sessions) {
       final dateKey = formatYMD(s.date);
       for (final ex in s.exercises) {
         if (ex.name != widget.exercise.name) continue;
         if (ex.sets.isEmpty) continue;
-        final maxRM =
-            ex.sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
-        byDate[dateKey] = maxRM > (byDate[dateKey] ?? 0) ? maxRM : byDate[dateKey]!;
+        final maxRM = ex.sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
+        if (maxRM > (byDate[dateKey] ?? 0)) {
+          byDate[dateKey] = maxRM;
+          bwByDate[dateKey] = s.bodyWeightKg;
+        }
+        final vol = ex.sets.fold(0.0, (sum, s) => sum + s.weight * s.reps);
+        volByDate[dateKey] = (volByDate[dateKey] ?? 0) + vol;
       }
     }
     final points = byDate.entries
-        .map((e) => _RMPoint(date: e.key, oneRM: e.value))
+        .map((e) => _RMPoint(date: e.key, oneRM: e.value, sessionBodyWeightKg: bwByDate[e.key]))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
-    if (mounted) setState(() => _history = points);
+    final volPoints = volByDate.entries
+        .map((e) => _VolumePoint(date: e.key, volume: e.value))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    if (mounted) {
+      setState(() {
+        _history = points;
+        _volumeHistory = volPoints;
+      });
+    }
   }
 
   void _recalculate() {
@@ -203,9 +218,13 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           const SizedBox(height: 16),
           _buildThresholdTable(),
           const SizedBox(height: 16),
-          _buildHistogram(),
-          const SizedBox(height: 16),
           _buildHistoryChart(),
+          const SizedBox(height: 16),
+          _buildRatioChart(),
+          const SizedBox(height: 16),
+          _buildVolumeChart(),
+          const SizedBox(height: 16),
+          _buildHistogram(),
           const SizedBox(height: 40),
         ],
       ),
@@ -221,7 +240,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: tier.color.withValues(alpha: 0.25)),
+            color: tier.colorForContext(context).withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
@@ -275,20 +294,20 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: tier.color.withValues(alpha: 0.12),
+              color: tier.colorForContext(context).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: tier.color.withValues(alpha: 0.3)),
+              border: Border.all(color: tier.colorForContext(context).withValues(alpha: 0.3)),
             ),
             child: Column(
               children: [
-                Icon(_tierIcon(tier), color: tier.color, size: 28),
+                Icon(_tierIcon(tier), color: tier.colorForContext(context), size: 28),
                 const SizedBox(height: 6),
                 Text(
                   tier.label,
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: tier.color,
+                    color: tier.colorForContext(context),
                   ),
                 ),
               ],
@@ -328,7 +347,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   height: 8,
                   decoration: BoxDecoration(
                     color: isActive
-                        ? t.color.withValues(alpha: isCurrent ? 1.0 : 0.5)
+                        ? t.colorForContext(context).withValues(alpha: isCurrent ? 1.0 : 0.5)
                         : context.cCardHigh,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -350,7 +369,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     fontWeight: isCurrent
                         ? FontWeight.w700
                         : FontWeight.w400,
-                    color: isCurrent ? t.color : context.cTextSub,
+                    color: isCurrent ? t.colorForContext(context) : context.cTextSub,
                   ),
                 ),
               );
@@ -372,7 +391,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: _result.tier.color,
+                    color: _result.tier.colorForContext(context),
                   ),
                 ),
               ],
@@ -385,7 +404,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 minHeight: 6,
                 backgroundColor: context.cCardHigh,
                 valueColor:
-                    AlwaysStoppedAnimation(_result.tier.color),
+                    AlwaysStoppedAnimation(_result.tier.colorForContext(context)),
               ),
             ),
           ],
@@ -446,7 +465,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: nextTier.color.withValues(alpha: 0.2)),
+            color: nextTier.colorForContext(context).withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -454,11 +473,11 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: nextTier.color.withValues(alpha: 0.1),
+              color: nextTier.colorForContext(context).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(Icons.flag_outlined,
-                color: nextTier.color, size: 22),
+                color: nextTier.colorForContext(context), size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -481,7 +500,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
-                        color: nextTier.color,
+                        color: nextTier.colorForContext(context),
                         letterSpacing: -1,
                         height: 1,
                       ),
@@ -502,7 +521,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: nextTier.color.withValues(alpha: 0.1),
+              color: nextTier.colorForContext(context).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -512,7 +531,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: nextTier.color,
+                    color: nextTier.colorForContext(context),
                   ),
                 ),
                 Text('kg 必要',
@@ -554,12 +573,12 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: isCurrent
-                    ? t.color.withValues(alpha: 0.08)
+                    ? t.colorForContext(context).withValues(alpha: 0.08)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: isCurrent
-                      ? t.color.withValues(alpha: 0.25)
+                      ? t.colorForContext(context).withValues(alpha: 0.25)
                       : Colors.transparent,
                 ),
               ),
@@ -567,7 +586,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Icon(_tierIcon(t),
                       size: 16,
-                      color: isCurrent ? t.color : context.cTextSub),
+                      color: isCurrent ? t.colorForContext(context) : context.cTextSub),
                   const SizedBox(width: 10),
                   Text(
                     t.label,
@@ -575,7 +594,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
-                      color: isCurrent ? t.color : context.cTextSub,
+                      color: isCurrent ? t.colorForContext(context) : context.cTextSub,
                     ),
                   ),
                   const Spacer(),
@@ -585,7 +604,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
-                      color: isCurrent ? t.color : context.cTextSub,
+                      color: isCurrent ? t.colorForContext(context) : context.cTextSub,
                     ),
                   ),
                   if (isCurrent) ...[
@@ -594,7 +613,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: t.color.withValues(alpha: 0.15),
+                        color: t.colorForContext(context).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -602,7 +621,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                         style: GoogleFonts.jetBrainsMono(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
-                            color: t.color),
+                            color: t.colorForContext(context)),
                       ),
                     ),
                   ],
@@ -845,6 +864,276 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     );
   }
 
+  // ── 体重比推移グラフ ────────────────────────────────────────
+  Widget _buildRatioChart() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        color: context.cCardLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '体重比推移（参考指標）',
+            style: GoogleFonts.jetBrainsMono(
+                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '1RM ÷ 体重 ${_bodyWeight.toStringAsFixed(0)}kg',
+            style: GoogleFonts.jetBrainsMono(
+                fontSize: 9, color: context.cTextSub.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 16),
+          if (_history.length < 2)
+            _buildChartEmpty()
+          else
+            _buildRatioLineChart(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatioLineChart() {
+    final spots = _history
+        .asMap()
+        .entries
+        .map((e) => FlSpot(e.key.toDouble(), e.value.oneRM / (e.value.sessionBodyWeightKg ?? _bodyWeight)))
+        .toList();
+    final minY = (spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) * 0.9);
+    final maxY = (spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.1);
+
+    return SizedBox(
+      height: 140,
+      child: LineChart(LineChartData(
+        minX: 0,
+        maxX: (_history.length - 1).toDouble(),
+        minY: minY,
+        maxY: maxY,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) =>
+              FlLine(color: Colors.white.withValues(alpha: 0.06), strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (v, _) => Text(
+                v.toStringAsFixed(2),
+                style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              interval: _history.length <= 6 ? 1 : (_history.length / 4).ceilToDouble(),
+              getTitlesWidget: (v, _) {
+                final idx = v.toInt();
+                if (idx < 0 || idx >= _history.length) return const SizedBox.shrink();
+                final parts = _history[idx].date.split('-');
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('${parts[1]}/${parts[2]}',
+                      style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub)),
+                );
+              },
+            ),
+          ),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.35,
+            color: kSecondary,
+            barWidth: 2.5,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                radius: 4,
+                color: kSecondary,
+                strokeWidth: 2,
+                strokeColor: context.cCardLow,
+              ),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [kSecondary.withValues(alpha: 0.18), kSecondary.withValues(alpha: 0.0)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (_) => context.cCardHigh,
+            getTooltipItems: (spots) => spots
+                .map((s) => LineTooltipItem(
+                      '${s.y.toStringAsFixed(2)}x',
+                      GoogleFonts.jetBrainsMono(
+                          fontSize: 11, fontWeight: FontWeight.w700, color: kSecondary),
+                    ))
+                .toList(),
+          ),
+        ),
+      )),
+    );
+  }
+
+  // ── 総ボリューム推移グラフ ──────────────────────────────────
+  Widget _buildVolumeChart() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        color: context.cCardLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '総ボリューム推移',
+            style: GoogleFonts.jetBrainsMono(
+                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '重量 × 回数 × セット数 (kg)',
+            style: GoogleFonts.jetBrainsMono(
+                fontSize: 9, color: context.cTextSub.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 16),
+          if (_volumeHistory.length < 2)
+            _buildChartEmpty()
+          else
+            _buildVolumeLineChart(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVolumeLineChart() {
+    final spots = _volumeHistory
+        .asMap()
+        .entries
+        .map((e) => FlSpot(e.key.toDouble(), e.value.volume))
+        .toList();
+    final minY = (spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) * 0.9);
+    final maxY = (spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.1);
+
+    return SizedBox(
+      height: 140,
+      child: LineChart(LineChartData(
+        minX: 0,
+        maxX: (_volumeHistory.length - 1).toDouble(),
+        minY: minY,
+        maxY: maxY,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) =>
+              FlLine(color: Colors.white.withValues(alpha: 0.06), strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 48,
+              getTitlesWidget: (v, _) => Text(
+                v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}t' : '${v.toInt()}',
+                style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              interval: _volumeHistory.length <= 6 ? 1 : (_volumeHistory.length / 4).ceilToDouble(),
+              getTitlesWidget: (v, _) {
+                final idx = v.toInt();
+                if (idx < 0 || idx >= _volumeHistory.length) return const SizedBox.shrink();
+                final parts = _volumeHistory[idx].date.split('-');
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('${parts[1]}/${parts[2]}',
+                      style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub)),
+                );
+              },
+            ),
+          ),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.35,
+            color: kTertiary,
+            barWidth: 2.5,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                radius: 4,
+                color: kTertiary,
+                strokeWidth: 2,
+                strokeColor: context.cCardLow,
+              ),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [kTertiary.withValues(alpha: 0.18), kTertiary.withValues(alpha: 0.0)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (_) => context.cCardHigh,
+            getTooltipItems: (spots) => spots
+                .map((s) => LineTooltipItem(
+                      '${s.y >= 1000 ? (s.y / 1000).toStringAsFixed(1) + "t" : s.y.toStringAsFixed(0) + "kg"}',
+                      GoogleFonts.jetBrainsMono(
+                          fontSize: 11, fontWeight: FontWeight.w700, color: kTertiary),
+                    ))
+                .toList(),
+          ),
+        ),
+      )),
+    );
+  }
+
+  Widget _buildChartEmpty() {
+    return SizedBox(
+      height: 80,
+      child: Center(
+        child: Text(
+          'データが蓄積されるとグラフが表示されます',
+          style: GoogleFonts.jetBrainsMono(fontSize: 11, color: context.cTextSub),
+        ),
+      ),
+    );
+  }
+
   IconData _tierIcon(StrengthTier t) {
     switch (t) {
       case StrengthTier.beginner:     return Icons.fitness_center;
@@ -856,9 +1145,15 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   }
 }
 
-// 1RM 推移データ点
 class _RMPoint {
-  final String date; // 'YYYY-MM-DD'
+  final String date;
   final double oneRM;
-  const _RMPoint({required this.date, required this.oneRM});
+  final double? sessionBodyWeightKg;
+  const _RMPoint({required this.date, required this.oneRM, this.sessionBodyWeightKg});
+}
+
+class _VolumePoint {
+  final String date;
+  final double volume;
+  const _VolumePoint({required this.date, required this.volume});
 }

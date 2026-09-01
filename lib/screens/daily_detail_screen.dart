@@ -60,17 +60,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
             color: context.cText,
           ),
         ),
-        actions: [
-          // 種目追加
-          IconButton(
-            icon: const Icon(Icons.add, color: kPrimary),
-            onPressed: _addExerciseSheet,
-          ),
-          IconButton(
-            icon: Icon(Icons.share_outlined, color: context.cTextSub),
-            onPressed: () {},
-          ),
-        ],
+        actions: const [],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: kPrimary))

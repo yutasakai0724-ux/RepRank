@@ -18,6 +18,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   DateTime? _selectedDay;
   String? _searchFilter;
   TextEditingController? _autocompleteController;
+  FocusNode? _autocompleteFocus;
 
   List<WorkoutSession> _sessions = [];
   bool _isLoading = true;
@@ -125,10 +126,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
           displayStringForOption: (s) => s,
           onSelected: (String selection) {
             setState(() => _searchFilter = selection);
-            Future.microtask(() => _autocompleteController?.clear());
+            Future.microtask(() {
+              _autocompleteController?.clear();
+              _autocompleteFocus?.unfocus();
+            });
           },
           fieldViewBuilder: (ctx, ctrl, focusNode, onSubmitted) {
             _autocompleteController = ctrl;
+            _autocompleteFocus = focusNode;
             return Container(
               decoration: BoxDecoration(
                 color: context.cCard,

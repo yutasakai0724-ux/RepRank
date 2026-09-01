@@ -65,6 +65,7 @@ class SqliteWorkoutRepository implements WorkoutRepository {
       exercises: exList
           .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
           .toList(),
+      bodyWeightKg: (row['body_weight_kg'] as num?)?.toDouble(),
     );
   }
 
@@ -77,5 +78,6 @@ class SqliteWorkoutRepository implements WorkoutRepository {
     'finished_at': s.finishedAt?.toIso8601String(),
     'exercises_json':
         jsonEncode(s.exercises.map((e) => e.toJson()).toList()),
+    'body_weight_kg': s.bodyWeightKg,
   };
 }

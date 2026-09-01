@@ -24,6 +24,19 @@ extension StrengthTierExt on StrengthTier {
       case StrengthTier.elite:        return const Color(0xFFFFD700);
     }
   }
+
+  Color colorForContext(BuildContext context) {
+    if (Theme.of(context).brightness == Brightness.light) {
+      switch (this) {
+        case StrengthTier.beginner:     return const Color(0xFF374151);
+        case StrengthTier.novice:       return const Color(0xFF1D4ED8);
+        case StrengthTier.intermediate: return const Color(0xFF15803D);
+        case StrengthTier.advanced:     return const Color(0xFFD45C00);
+        case StrengthTier.elite:        return const Color(0xFF92600A);
+      }
+    }
+    return color;
+  }
 }
 
 // ── ExRx 基準 (体重倍率, 男性) ──────────────────────────────────
