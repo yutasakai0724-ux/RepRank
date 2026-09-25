@@ -1,9 +1,33 @@
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'user_preferences.dart';
+
+/// 通知アクション「タイマーをリセット」の ID。
+const _actionResetRest = 'reset_rest';
+const _actionResetStopwatch = 'reset_stopwatch';
+/// メイン isolate へ送るメッセージ（ストップウォッチ用）。休憩は種目キーをそのまま送る。
+const _stopwatchResetMessage = '__stopwatch_reset__';
+const _resetPortName = 'rep_rank_rest_reset_port';
+
+/// アプリが動作中でも通知アクション（バックグラウンド）は別 isolate で実行されるため、
+/// メイン isolate に ReceivePort 経由でキーを送ってタイマーを止めてもらう。
+@pragma('vm:entry-point')
+void notificationActionBackground(NotificationResponse response) {
+  final port = IsolateNameServer.lookupPortByName(_resetPortName);
+  if (response.actionId == _actionResetStopwatch) {
+    port?.send(_stopwatchResetMessage);
+    return;
+  }
+  if (response.actionId != _actionResetRest) return;
+  final key = response.payload;
+  if (key == null) return;
+  port?.send(key);
+}
 
 class NotificationService {
   NotificationService._();
@@ -39,7 +63,41 @@ class NotificationService {
     }
   }
 
+  // ── 通知アクション: タイマーをリセット ─────────────────────────
+  void Function(String exerciseKey)? _resetHandler;
+  void Function()? _stopwatchResetHandler;
+  final ReceivePort _resetPort = ReceivePort();
+
+  void setStopwatchResetHandler(void Function() handler) {
+    _stopwatchResetHandler = handler;
+  }
+
+  void setResetHandler(void Function(String exerciseKey) handler) {
+    _resetHandler = handler;
+  }
+
+  void _registerResetPort() {
+    IsolateNameServer.removePortNameMapping(_resetPortName);
+    IsolateNameServer.registerPortWithName(_resetPort.sendPort, _resetPortName);
+    _resetPort.listen((message) {
+      if (message == _stopwatchResetMessage) {
+        _stopwatchResetHandler?.call();
+      } else if (message is String) {
+        _resetHandler?.call(message);
+      }
+    });
+  }
+
   void _onNotificationTap(NotificationResponse response) {
+    if (response.actionId == _actionResetStopwatch) {
+      _stopwatchResetHandler?.call();
+      return;
+    }
+    if (response.actionId == _actionResetRest) {
+      final key = response.payload;
+      if (key != null) _resetHandler?.call(key);
+      return;
+    }
     _dispatchNavigation(response.payload);
   }
 
@@ -80,7 +138,9 @@ class NotificationService {
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
       onDidReceiveNotificationResponse: _onNotificationTap,
+      onDidReceiveBackgroundNotificationResponse: notificationActionBackground,
     );
+    _registerResetPort();
     _initialized = true;
   }
 
@@ -186,6 +246,14 @@ class NotificationService {
             usesChronometer: true,
             chronometerCountDown: true,
             when: endTime.millisecondsSinceEpoch,
+            actions: const [
+              AndroidNotificationAction(
+                _actionResetRest,
+                'タイマーをリセット',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+            ],
           ),
         ),
         payload: key,
@@ -226,6 +294,14 @@ class NotificationService {
             usesChronometer: true,
             chronometerCountDown: false,
             when: startedAt.millisecondsSinceEpoch,
+            actions: const [
+              AndroidNotificationAction(
+                _actionResetStopwatch,
+                'タイマーをリセット',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+            ],
           ),
         ),
       );

@@ -9,9 +9,9 @@ void main() {
       expect(s.oneRM, 100.0);
     });
 
-    test('oneRM: 1 rep returns weight * (1/40 + 1) = weight * 1.025', () {
+    test('oneRM: 1 rep returns the weight as-is', () {
       final s = WorkoutSet(setNumber: 1, weight: 100.0, reps: 1);
-      expect(s.oneRM, closeTo(102.5, 0.001));
+      expect(s.oneRM, 100.0);
     });
 
     test('oneRM: 10 reps — Epley formula', () {

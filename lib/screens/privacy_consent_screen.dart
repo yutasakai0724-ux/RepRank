@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../services/user_preferences.dart';
 
@@ -16,7 +16,7 @@ class PrivacyConsentScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
         title: Text(
           'プライバシーポリシー',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
               fontSize: 17, fontWeight: FontWeight.w700, color: kPrimary),
         ),
       ),
@@ -148,7 +148,7 @@ class PrivacyConsentScreen extends StatelessWidget {
                 Text(
                   '上記のプライバシーポリシーに同意しますか？\n後からプロフィール画面で変更できます。',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                       fontSize: 12, color: context.cTextSub, height: 1.5),
                 ),
                 const SizedBox(height: 16),
@@ -168,7 +168,7 @@ class PrivacyConsentScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12)),
                         ),
                         child: Text('同意しない',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.inter(
                                 fontSize: 15, color: context.cTextSub)),
                       ),
                     ),
@@ -188,7 +188,7 @@ class PrivacyConsentScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12)),
                         ),
                         child: Text('同意する',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white)),
@@ -212,7 +212,7 @@ class PrivacyConsentScreen extends StatelessWidget {
           border: Border.all(color: kPrimary.withValues(alpha: 0.3)),
         ),
         child: Text(text,
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontSize: 11, fontWeight: FontWeight.w700, color: kPrimary)),
       );
 
@@ -222,7 +222,7 @@ class PrivacyConsentScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(text,
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: context.cText)),
@@ -235,7 +235,7 @@ class PrivacyConsentScreen extends StatelessWidget {
   Widget _h3(BuildContext context, String text) => Padding(
         padding: const EdgeInsets.only(top: 14, bottom: 6),
         child: Text(text,
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: context.cText)),
@@ -244,7 +244,7 @@ class PrivacyConsentScreen extends StatelessWidget {
   Widget _body(BuildContext context, String text) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
         child: Text(text,
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontSize: 13, color: context.cTextSub, height: 1.6)),
       );
 
@@ -268,7 +268,7 @@ class PrivacyConsentScreen extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(item,
-                              style: GoogleFonts.inter(
+                              style: AppFonts.inter(
                                   fontSize: 13,
                                   color: context.cTextSub,
                                   height: 1.6)),

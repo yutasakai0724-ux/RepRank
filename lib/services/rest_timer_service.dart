@@ -41,6 +41,10 @@ class RestTimerService extends ChangeNotifier {
 
   final Map<String, RestTimerEntry> _entries = {};
 
+  /// 毎秒の残り時間更新専用の通知。状態変化（開始・停止など）は notifyListeners()。
+  /// 秒ごとに画面全体を再構築しないよう、数字表示側は tick だけを購読する。
+  final ValueNotifier<int> tick = ValueNotifier<int>(0);
+
   /// 種目名からタイマーキーを生成する。
   static String keyFor(String exerciseName) => exerciseName;
 
@@ -170,7 +174,7 @@ class RestTimerService extends ChangeNotifier {
       });
     } else {
       entry.remainingSec = remaining;
-      notifyListeners();
+      tick.value++;
     }
   }
 }

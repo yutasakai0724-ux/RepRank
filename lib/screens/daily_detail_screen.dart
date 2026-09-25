@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
@@ -54,7 +54,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
         ),
         title: Text(
           _dateLabel,
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             color: context.cText,
@@ -109,7 +109,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           const SizedBox(height: 16),
           Text(
             'トレーニング記録はありません',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: context.cTextSub,
@@ -118,7 +118,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           const SizedBox(height: 6),
           Text(
             '＋ボタンで種目を追加できます',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 12,
               color: context.cTextSub.withValues(alpha: 0.6),
             ),
@@ -138,7 +138,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
         if (streakLabel.isNotEmpty)
           Text(
             streakLabel,
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 12,
               color: kPrimary,
               letterSpacing: 1,
@@ -148,7 +148,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           const SizedBox.shrink(),
         Text(
           '${_sessions.length} セッション',
-          style: GoogleFonts.jetBrainsMono(
+          style: AppFonts.jetBrainsMono(
             fontSize: 11,
             color: context.cTextSub,
           ),
@@ -193,22 +193,22 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('記録を削除',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Text(
           '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
-          style: GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
+          style: AppFonts.inter(fontSize: 14, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('削除',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: Colors.red.shade400, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -268,7 +268,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                           children: [
                             Text(
                               session.sessionName ?? '記録',
-                              style: GoogleFonts.inter(
+                              style: AppFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                                 color: context.cText,
@@ -276,7 +276,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                             ),
                             Text(
                               startLabel,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: AppFonts.jetBrainsMono(
                                 fontSize: 10,
                                 color: context.cTextSub,
                               ),
@@ -291,7 +291,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                               : session.exercises.map((e) => e.name).join(', '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                             fontSize: 11,
                             color: context.cTextSub,
                           ),
@@ -304,7 +304,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                             const SizedBox(width: 4),
                             Text(
                               '${totalVolume.toStringAsFixed(0)} kg',
-                              style: GoogleFonts.jetBrainsMono(
+                              style: AppFonts.jetBrainsMono(
                                   fontSize: 11, color: context.cText),
                             ),
                             if (duration != null) ...[
@@ -314,7 +314,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                               const SizedBox(width: 4),
                               Text(
                                 '${duration.inMinutes} 分',
-                                style: GoogleFonts.jetBrainsMono(
+                                style: AppFonts.jetBrainsMono(
                                     fontSize: 11, color: context.cText),
                               ),
                             ],
@@ -400,7 +400,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   if (session.routineName != null)
                     Text(
                       session.routineName!,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                         fontSize: 9,
                         color: kPrimary.withValues(alpha: 0.7),
                         letterSpacing: 0.5,
@@ -410,11 +410,11 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                     children: [
                       if (session.routineName != null)
                         Text('› ',
-                            style: GoogleFonts.jetBrainsMono(
+                            style: AppFonts.jetBrainsMono(
                                 fontSize: 12, color: kPrimary)),
                       Text(
                         exercise.name,
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: context.cText,
@@ -430,7 +430,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                         ),
                         child: Text(
                           exercise.muscleGroup.label,
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                             fontSize: 9,
                             color: context.cTextSub,
                           ),
@@ -442,7 +442,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   // セットサマリー
                   Text(
                     '${exercise.sets.length} セット  •  ${totalVol.toStringAsFixed(0)} kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 10,
                       color: context.cTextSub,
                     ),
@@ -456,7 +456,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               children: [
                 Text(
                   '1RM',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 9,
                     color: context.cTextSub,
                     letterSpacing: 0.5,
@@ -464,7 +464,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                 ),
                 Text(
                   '${maxRM.toStringAsFixed(1)}kg',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: kTertiary,

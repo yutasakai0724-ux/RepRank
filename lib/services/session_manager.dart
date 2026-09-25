@@ -19,6 +19,15 @@ class SessionManager extends ChangeNotifier {
     _repo = repository;
   }
 
+  /// ユーザー操作による保存。最終更新日時を付けて書き込む（同期時の新旧判定に使う）。
+  Future<void> _save(WorkoutSession session) {
+    session.updatedAt = DateTime.now();
+    return _repo.upsertSession(session);
+  }
+
+  /// 同期など外部要因でデータが更新されたことを画面に知らせる。
+  void notifyDataChanged() => notifyListeners();
+
   // ── アクティブセッション ──────────────────────────────────────
 
   WorkoutSession? get active => _active;
@@ -57,7 +66,7 @@ class SessionManager extends ChangeNotifier {
     } else {
       session.exercises.add(exercise);
     }
-    await _repo.upsertSession(session);
+    await _save(session);
     notifyListeners();
   }
 
@@ -79,7 +88,7 @@ class SessionManager extends ChangeNotifier {
     } else {
       session.exercises.add(exercise);
     }
-    await _repo.upsertSession(session);
+    await _save(session);
     notifyListeners();
   }
 
@@ -113,7 +122,7 @@ class SessionManager extends ChangeNotifier {
       date: date,
       startedAt: date,
     );
-    await _repo.upsertSession(session);
+    await _save(session);
     return session;
   }
 
@@ -121,7 +130,7 @@ class SessionManager extends ChangeNotifier {
   Future<WorkoutSession?> finish() async {
     if (_active == null) return null;
     _active!.finishedAt = DateTime.now();
-    await _repo.upsertSession(_active!);
+    await _save(_active!);
     final finished = _active;
     _active = null;
     return finished;
@@ -142,7 +151,7 @@ class SessionManager extends ChangeNotifier {
     if (session == null) return;
 
     session.bodyWeightKg = weight;
-    await _repo.upsertSession(session);
+    await _save(session);
 
     final today = DateTime.now();
     final d = session.date;

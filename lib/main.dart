@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'utils/app_fonts.dart';
 import 'theme.dart';
 import 'models/workout.dart';
 import 'services/rest_timer_service.dart';
+import 'services/stopwatch_service.dart';
 import 'services/navigation_service.dart';
 import 'data/database_helper.dart';
 import 'repositories/sqlite_workout_repository.dart';
@@ -135,6 +136,12 @@ class _AuthGateState extends State<_AuthGate> {
     AuthService.instance.authStateChanges.listen(_onAuthChanged);
     // 休憩タイマー通知タップ → 該当種目の記録画面へ遷移
     NotificationService.instance.setNavigationHandler(_navigateToExerciseTimer);
+    // 通知の「タイマーをリセット」ボタン → 該当種目の休憩タイマーを停止
+    NotificationService.instance
+        .setResetHandler((key) => RestTimerService.instance.stop(key));
+    // 通知の「タイマーをリセット」（ワークアウト時間） → ストップウォッチをリセット
+    NotificationService.instance
+        .setStopwatchResetHandler(() => StopwatchService.instance.reset());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _checkPrivacyConsent();
       await _checkTutorial();
@@ -223,23 +230,23 @@ class _AuthGateState extends State<_AuthGate> {
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('通知を許可しますか？',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Text(
           'トレーニング時間の計測・休憩タイマーの終了をお知らせするために通知を使用します。'
           'アプリを離れていても経過時間や残り時間を確認できます。',
-          style: GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
+          style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('後で',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('許可する',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],

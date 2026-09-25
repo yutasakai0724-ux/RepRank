@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../services/user_preferences.dart';
 
@@ -51,7 +51,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                 onPressed: _finish,
                 child: Text(
                   'スキップ',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                       fontSize: 13, color: context.cTextSub),
                 ),
               ),
@@ -97,7 +97,7 @@ class _TutorialScreenState extends State<TutorialScreen> {
                 ),
                 child: Text(
                   _page < _totalPages - 1 ? '次へ' : 'はじめる',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                       fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -131,7 +131,7 @@ class _TutorialPage1 extends StatelessWidget {
           const SizedBox(height: 28),
           Text(
             'プロフィールを設定しよう',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 22,
               fontWeight: FontWeight.w800,
               color: context.cText,
@@ -186,7 +186,7 @@ class _TutorialPage1 extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: context.cText,
@@ -195,7 +195,7 @@ class _TutorialPage1 extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 body,
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                   fontSize: 13,
                   color: context.cTextSub,
                   height: 1.5,
@@ -232,7 +232,7 @@ class _TutorialPage2 extends StatelessWidget {
           const SizedBox(height: 28),
           Text(
             'トレーニングを記録しよう',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 22,
               fontWeight: FontWeight.w800,
               color: context.cText,
@@ -287,7 +287,7 @@ class _TutorialPage2 extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: context.cText,
@@ -296,7 +296,7 @@ class _TutorialPage2 extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 body,
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                   fontSize: 13,
                   color: context.cTextSub,
                   height: 1.5,

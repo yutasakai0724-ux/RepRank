@@ -4,7 +4,7 @@ import 'package:app_settings/app_settings.dart' as os_settings;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -121,7 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         elevation: 0,
         title: Text(
           '設定',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: kPrimary,
@@ -220,7 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               child: Text(
                                 g,
-                                style: GoogleFonts.inter(
+                                style: AppFonts.inter(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: active ? kPrimary : context.cTextSub,
@@ -306,7 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Expanded(
                   child: Text('端末の通知設定を開く',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: context.cText)),
@@ -335,14 +335,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: context.cText)),
                 if (sub != null) ...[
                   const SizedBox(height: 2),
                   Text(sub,
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 11, color: context.cTextSub)),
                 ],
               ],
@@ -375,7 +375,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               children: [
                 Text('ライトモード',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
                 const Spacer(),
                 Switch(
@@ -399,12 +399,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Row(
                   children: [
                     Text('文字サイズ',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
                     const Spacer(),
                     Text(
                       scale <= 1.0 ? '標準' : scale <= 1.15 ? '大' : '特大',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 12, color: context.cText, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -431,7 +431,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               children: [
                 Text('重量単位',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
                 const Spacer(),
                 _unitToggle(),
@@ -470,7 +470,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         child: Text(
           label,
-          style: GoogleFonts.jetBrainsMono(
+          style: AppFonts.jetBrainsMono(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: active ? kPrimary : context.cTextSub,
@@ -511,13 +511,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('不具合を報告',
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: context.cText)),
                     const SizedBox(height: 2),
                     Text('バグ・改善要望を送信',
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                             fontSize: 11, color: context.cTextSub)),
                   ],
                 ),
@@ -537,13 +537,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         title: Text('不具合を報告',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('発生した不具合や改善要望を入力してください。',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     fontSize: 13, color: context.cTextSub, height: 1.4)),
             const SizedBox(height: 12),
             TextField(
@@ -558,7 +558,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              style: GoogleFonts.inter(fontSize: 13, color: context.cText),
+              style: AppFonts.inter(fontSize: 13, color: context.cText),
             ),
           ],
         ),
@@ -566,12 +566,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('送信',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -608,7 +608,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('報告を送信しました。ありがとうございます！',
-              style: GoogleFonts.inter(color: Colors.white)),
+              style: AppFonts.inter(color: Colors.white)),
           backgroundColor: context.cCardHigh,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -686,7 +686,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title.toUpperCase(),
-      style: GoogleFonts.jetBrainsMono(
+      style: AppFonts.jetBrainsMono(
           fontSize: 10, color: context.cTextSub, letterSpacing: 1.5),
     );
   }
@@ -727,14 +727,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('同期中',
-                                style: GoogleFonts.inter(
+                                style: AppFonts.inter(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     color: kPrimary)),
                             const SizedBox(height: 2),
                             Text(
                               user.email ?? user.uid,
-                              style: GoogleFonts.inter(
+                              style: AppFonts.inter(
                                   fontSize: 12, color: context.cTextSub),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -756,7 +756,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             size: 18, color: context.cTextSub),
                         const SizedBox(width: 12),
                         Text('ログアウト',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.inter(
                                 fontSize: 14, color: context.cTextSub)),
                       ],
                     ),
@@ -778,7 +778,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             size: 18, color: Colors.redAccent),
                         const SizedBox(width: 12),
                         Text('アカウントを削除',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.inter(
                                 fontSize: 14, color: Colors.redAccent)),
                       ],
                     ),
@@ -817,13 +817,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('ログイン / アカウント作成',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: context.cText)),
                       const SizedBox(height: 2),
                       Text('データをバックアップ・複数端末で同期',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                               fontSize: 11, color: context.cTextSub)),
                     ],
                   ),
@@ -843,20 +843,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         title: Text('ログアウト',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Text('ログアウトしますか？\nデータはこの端末に保持されます。',
-            style: GoogleFonts.inter(color: context.cTextSub)),
+            style: AppFonts.inter(color: context.cTextSub)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('ログアウト',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -871,21 +871,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         title: Text('アカウントを削除',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: Colors.redAccent)),
         content: Text(
             'アカウントを完全に削除します。\nクラウドに保存されたデータも全て削除されます。\nこの操作は取り消せません。',
-            style: GoogleFonts.inter(color: context.cTextSub, height: 1.6)),
+            style: AppFonts.inter(color: context.cTextSub, height: 1.6)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('削除する',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: Colors.redAccent, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -899,7 +899,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('アカウントを削除しました',
-                style: GoogleFonts.inter(color: Colors.white)),
+                style: AppFonts.inter(color: Colors.white)),
             backgroundColor: context.cCardHigh,
             behavior: SnackBarBehavior.floating,
           ),
@@ -910,7 +910,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('セキュリティのため再ログインが必要です。一度ログアウトして再度ログインしてください。',
-                style: GoogleFonts.inter(color: Colors.white)),
+                style: AppFonts.inter(color: Colors.white)),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 5),
@@ -922,7 +922,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('削除に失敗しました: ${e.message}',
-                style: GoogleFonts.inter(color: Colors.white)),
+                style: AppFonts.inter(color: Colors.white)),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -947,7 +947,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   '匿名統計データを共有',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: context.cText,
@@ -956,7 +956,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'ヒストグラム機能の精度向上のため、種目名と体重比のみを匿名で送信します。',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 11,
                     color: context.cTextSub,
                     height: 1.4,
@@ -999,7 +999,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(width: 12),
             Text(
               'プライバシーポリシー',
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: context.cText),
@@ -1029,7 +1029,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Row(
         children: [
           Text(label,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   color: context.cTextSub,
                   letterSpacing: 0.5)),
@@ -1048,7 +1048,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         controller: ctrl,
         keyboardType: inputType,
         textAlign: TextAlign.right,
-        style: GoogleFonts.inter(fontSize: 14, color: context.cText),
+        style: AppFonts.inter(fontSize: 14, color: context.cText),
         decoration: InputDecoration(
           isDense: true,
           contentPadding:
@@ -1059,7 +1059,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             borderSide: BorderSide(color: kPrimary, width: 1),
           ),
           suffixText: suffix,
-          suffixStyle: GoogleFonts.jetBrainsMono(
+          suffixStyle: AppFonts.jetBrainsMono(
               fontSize: 12, color: context.cTextSub),
         ),
       ),
@@ -1089,7 +1089,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 TextSpan(
                   text: value,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: context.cText,
@@ -1097,7 +1097,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 TextSpan(
                   text: unit,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 11, color: context.cTextSub),
                 ),
               ],
@@ -1105,7 +1105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 4),
           Text(label,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 9, color: context.cTextSub),
               textAlign: TextAlign.center),
         ],

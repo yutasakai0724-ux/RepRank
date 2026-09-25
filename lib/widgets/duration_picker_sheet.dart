@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../utils/time_format.dart';
 
@@ -59,7 +59,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
             const SizedBox(height: 16),
             Text(
               '休憩時間を選択',
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: context.cText,
@@ -85,7 +85,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                     ),
                     child: Text(
                       formatMMSS(s),
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: isSelected ? Colors.white : context.cText,
@@ -98,7 +98,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
             const SizedBox(height: 20),
             Text(
               'カスタム（秒）',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 10,
                 color: context.cTextSub,
                 letterSpacing: 1,
@@ -108,19 +108,19 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
             TextField(
               controller: _customCtrl,
               keyboardType: TextInputType.number,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: context.cText,
               ),
               decoration: InputDecoration(
                 hintText: '例: 75',
-                hintStyle: GoogleFonts.jetBrainsMono(
+                hintStyle: AppFonts.jetBrainsMono(
                   color: context.cTextSub.withValues(alpha: 0.5),
                   fontSize: 14,
                 ),
                 suffixText: '秒',
-                suffixStyle: GoogleFonts.jetBrainsMono(
+                suffixStyle: AppFonts.jetBrainsMono(
                   color: context.cTextSub,
                   fontSize: 14,
                 ),
@@ -157,7 +157,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                     ),
                     child: Text(
                       'キャンセル',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: context.cTextSub,
@@ -179,7 +179,7 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
                     ),
                     child: Text(
                       '${formatMMSS(_selected)} に設定',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/scheduler.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../services/rest_timer_service.dart';
 import '../services/navigation_service.dart';
@@ -31,7 +32,18 @@ class _RestTimerOverlayState extends State<RestTimerOverlay> {
   }
 
   void _onChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // 記録画面の dispose 中（フレーム構築の最終段階）に通知されると setState が
+    // 拒否され、オーバーレイが再表示されないまま残る。次フレームに回して確実に更新する。
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      setState(() {});
+    }
   }
 
   @override
@@ -95,7 +107,7 @@ class _RestTimerOverlayState extends State<RestTimerOverlay> {
         onTap: () => _openExercise(entry),
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.only(left: 14, right: 10),
           decoration: BoxDecoration(
             color: isFinished ? kTertiary : context.cCardHigh,
             borderRadius: BorderRadius.circular(14),
@@ -119,7 +131,7 @@ class _RestTimerOverlayState extends State<RestTimerOverlay> {
               Flexible(
                 child: Text(
                   entry.exercise.name,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: isFinished
@@ -133,40 +145,47 @@ class _RestTimerOverlayState extends State<RestTimerOverlay> {
               if (isFinished)
                 Text(
                   '休憩終了！',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                   ),
                 )
               else ...[
-                Text(
-                  formatMMSS(entry.remainingSec),
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: isPaused ? context.cTextSub : kSecondary,
-                    letterSpacing: 1,
+                ValueListenableBuilder<int>(
+                  valueListenable: RestTimerService.instance.tick,
+                  builder: (_, __, ___) => Text(
+                    formatMMSS(entry.remainingSec),
+                    style: AppFonts.jetBrainsMono(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isPaused ? context.cTextSub : kSecondary,
+                      letterSpacing: 1,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   isPaused ? '一時停止中' : '休憩中',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 10,
                     color: context.cTextSub,
                   ),
                 ),
               ],
-              const SizedBox(width: 10),
+              // ×ボタン：タップ範囲を広く取る（アイコン自体は小さくても押しやすいように）
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => RestTimerService.instance.stop(entry.key),
-                child: Icon(
-                  Icons.close,
-                  size: 16,
-                  color: isFinished
-                      ? Colors.white.withValues(alpha: 0.8)
-                      : context.cTextSub,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+                  child: Icon(
+                    Icons.close,
+                    size: 20,
+                    color: isFinished
+                        ? Colors.white.withValues(alpha: 0.9)
+                        : context.cTextSub,
+                  ),
                 ),
               ),
             ],

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/analytics_service.dart';
@@ -185,22 +185,22 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('前回の記録をペースト',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Text(
           '現在入力中の全セットが前回の記録（重量・回数・メモ）で上書きされます。よろしいですか？',
-          style: GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
+          style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('ペースト',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -248,9 +248,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   // ── 自動保存 ────────────────────────────────────────
 
   void _triggerSave() {
-    setState(() => _saveStatus = 'saving');
+    // 連続入力のたびに画面全体を再構築しないよう、状態が変わるときだけ setState する
+    if (_saveStatus != 'saving') setState(() => _saveStatus = 'saving');
     _saveDebounce?.cancel();
-    _saveDebounce = Timer(const Duration(milliseconds: 300), () async {
+    _saveDebounce = Timer(const Duration(milliseconds: 600), () async {
       await _commitSaveAsync();
       if (mounted) setState(() => _saveStatus = 'saved');
     });
@@ -341,16 +342,16 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('この記録の体重',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.inter(color: context.cText),
+          style: AppFonts.inter(color: context.cText),
           decoration: InputDecoration(
             suffixText: 'kg',
-            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
+            suffixStyle: AppFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: context.cBorderSub)),
             focusedBorder: UnderlineInputBorder(
@@ -361,7 +362,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () {
@@ -369,7 +370,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               Navigator.pop(ctx, v);
             },
             child: Text('保存',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -431,7 +432,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         children: [
           Text(
             widget.exercise.name,
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w800,
               color: kPrimary,
@@ -440,7 +441,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           ),
           Text(
             widget.exercise.muscleGroup.label,
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 10,
               color: context.cTextSub,
             ),
@@ -468,7 +469,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               _bodyWeightKg != null
                   ? '${_bodyWeightKg!.toStringAsFixed(0)}kg'
                   : '--',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: context.cText,
@@ -476,7 +477,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             ),
             Text(
               '体重 ✎',
-              style: GoogleFonts.jetBrainsMono(fontSize: 8, color: context.cTextSub),
+              style: AppFonts.jetBrainsMono(fontSize: 8, color: context.cTextSub),
             ),
           ],
         ),
@@ -498,7 +499,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           Icon(icon, size: 14, color: color),
           Text(
             label,
-            style: GoogleFonts.jetBrainsMono(fontSize: 8, color: color),
+            style: AppFonts.jetBrainsMono(fontSize: 8, color: color),
           ),
         ],
       ),
@@ -536,7 +537,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         ),
         child: Text(
           label,
-          style: GoogleFonts.jetBrainsMono(
+          style: AppFonts.jetBrainsMono(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             color: active ? kPrimary : context.cTextSub,
@@ -565,7 +566,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                   children: [
                     Text(
                       '前回の記録',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                         fontSize: 9,
                         color: context.cTextSub,
                         letterSpacing: 0.5,
@@ -587,7 +588,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                   ..._prevRecord!.sets.take(3).map(
                         (s) => Text(
                           '${s.weight.toStringAsFixed(1)}kg × ${s.reps}',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: kPrimaryLight,
@@ -597,7 +598,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 else
                   Text(
                     '--',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: context.cTextSub,
@@ -612,7 +613,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               children: [
                 Text(
                   '現在の最大1RM',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 9,
                     color: context.cTextSub,
                     letterSpacing: 0.5,
@@ -621,7 +622,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '${_currentMaxRM.toStringAsFixed(1)}kg',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: kTertiary,
@@ -657,7 +658,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                   const SizedBox(height: 2),
                   Text(
                     '分析',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 9,
                       color: _currentMaxRM > 0
                           ? kPrimary
@@ -690,7 +691,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         minLines: 1,
         keyboardType: TextInputType.multiline,
         textInputAction: TextInputAction.newline,
-        style: GoogleFonts.inter(fontSize: 13, color: context.cText),
+        style: AppFonts.inter(fontSize: 13, color: context.cText),
         decoration: InputDecoration(
           isDense: true,
           filled: false,
@@ -698,7 +699,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           icon: Icon(Icons.sticky_note_2_outlined,
               size: 16, color: context.cTextSub),
           hintText: 'この種目のメモ（フォーム・意識点など）',
-          hintStyle: GoogleFonts.inter(fontSize: 12, color: context.cTextSub),
+          hintStyle: AppFonts.inter(fontSize: 12, color: context.cTextSub),
         ),
         onChanged: (_) => _triggerSave(),
       ),
@@ -761,7 +762,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     return [
       Text(
         '休憩タイマー',
-        style: GoogleFonts.inter(
+        style: AppFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: context.cText,
@@ -781,7 +782,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             children: [
               Text(
                 formatMMSS(durationSec),
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: context.cText,
@@ -809,7 +810,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               const SizedBox(width: 2),
               Text(
                 'START',
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -824,22 +825,24 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   }
 
   List<Widget> _restRunningContent(bool isPaused) {
-    final remaining =
-        RestTimerService.instance.entryFor(_timerKey)?.remainingSec ?? 0;
     return [
-      Text(
-        formatMMSS(remaining),
-        style: GoogleFonts.jetBrainsMono(
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          color: isPaused ? context.cTextSub : kSecondary,
-          letterSpacing: 1,
+      ValueListenableBuilder<int>(
+        valueListenable: RestTimerService.instance.tick,
+        builder: (_, __, ___) => Text(
+          formatMMSS(
+              RestTimerService.instance.entryFor(_timerKey)?.remainingSec ?? 0),
+          style: AppFonts.jetBrainsMono(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: isPaused ? context.cTextSub : kSecondary,
+            letterSpacing: 1,
+          ),
         ),
       ),
       const SizedBox(width: 6),
       Text(
         isPaused ? '一時停止' : '休憩中',
-        style: GoogleFonts.jetBrainsMono(
+        style: AppFonts.jetBrainsMono(
           fontSize: 9,
           color: context.cTextSub,
           letterSpacing: 1,
@@ -884,7 +887,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     return [
       Text(
         '休憩終了！',
-        style: GoogleFonts.inter(
+        style: AppFonts.inter(
           fontSize: 14,
           fontWeight: FontWeight.w800,
           color: kTertiary,
@@ -901,7 +904,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           ),
           child: Text(
             'OK',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -921,7 +924,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           SizedBox(
             width: 28,
             child: Text('SET',
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                     fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 8),
@@ -929,7 +932,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             flex: 3,
             child: Text('重量',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                     fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 8),
@@ -937,7 +940,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             flex: 4,
             child: Text('回数',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                     fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 8),
@@ -945,7 +948,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             flex: 3,
             child: Text('1RM推定',
                 textAlign: TextAlign.right,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                     fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
           ),
           const SizedBox(width: 28),
@@ -974,7 +977,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 child: Text(
                   '${s.setNumber}',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: kPrimary,
@@ -1008,7 +1011,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                     ),
                     child: Text(
                       '${s.oneRM.toStringAsFixed(1)}kg',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
                         color: kTertiary,
@@ -1039,14 +1042,14 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               minLines: 1,
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.newline,
-              style: GoogleFonts.inter(fontSize: 11, color: context.cTextSub),
+              style: AppFonts.inter(fontSize: 11, color: context.cTextSub),
               decoration: InputDecoration(
                 isDense: true,
                 filled: false,
                 border: InputBorder.none,
                 hintText: 'セットメモ',
                 hintStyle:
-                    GoogleFonts.inter(fontSize: 11, color: context.cTextSub.withValues(alpha: 0.5)),
+                    AppFonts.inter(fontSize: 11, color: context.cTextSub.withValues(alpha: 0.5)),
               ),
               onChanged: (v) {
                 _sets[i].memo = v.trim().isEmpty ? null : v.trim();
@@ -1083,7 +1086,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       controller: _weightCtrl[i],
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textAlign: TextAlign.center,
-      style: GoogleFonts.jetBrainsMono(
+      style: AppFonts.jetBrainsMono(
         fontSize: 14,
         fontWeight: FontWeight.w700,
         color: kPrimary,
@@ -1144,7 +1147,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               controller: _repsCtrl[i],
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: reps > 0 ? kPrimary : context.cTextSub,
@@ -1237,7 +1240,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                     const SizedBox(width: 6),
                     Text(
                       'セットを追加',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: context.cTextSub,
@@ -1272,7 +1275,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                     const SizedBox(width: 6),
                     Text(
                       '次の種目',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
@@ -1375,7 +1378,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           Expanded(
             child: Text(
               '記録済み: ${session.exercises.map((e) => e.name).join(' · ')}',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 10,
                 color: context.cTextSub,
               ),

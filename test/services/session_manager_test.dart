@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:RepRank/models/workout.dart';
 import 'package:RepRank/repositories/workout_repository.dart';
 import 'package:RepRank/services/session_manager.dart';
@@ -45,6 +46,7 @@ void main() {
   late _MockRepo repo;
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     repo = _MockRepo();
     _resetManager(repo);
   });
@@ -133,7 +135,7 @@ void main() {
     });
 
     test('sets finishedAt and clears active session', () async {
-      SessionManager.instance.getOrCreate();
+      await SessionManager.instance.getOrCreate();
       await SessionManager.instance.saveExercise(
         Exercise(name: 'デッドリフト', muscleGroup: MuscleGroup.back),
       );
@@ -158,7 +160,7 @@ void main() {
     });
 
     test('persists session to DB after finish', () async {
-      SessionManager.instance.getOrCreate(sessionName: 'テスト');
+      await SessionManager.instance.getOrCreate(sessionName: 'テスト');
       await SessionManager.instance.finish();
 
       final sessions = await repo.getAllSessions();

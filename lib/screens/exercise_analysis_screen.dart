@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:fl_chart/fl_chart.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../data/strength_standards.dart';
@@ -8,6 +7,7 @@ import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
 import 'exercise_record_screen.dart';
+import '../widgets/trend_chart_card.dart';
 
 class ExerciseAnalysisScreen extends StatefulWidget {
   final Exercise exercise;
@@ -124,17 +124,17 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('体重を設定',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.inter(color: context.cText),
+          style: AppFonts.inter(color: context.cText),
           decoration: InputDecoration(
             suffixText: 'kg',
-            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
+            suffixStyle: AppFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: context.cBorderSub)),
             focusedBorder: UnderlineInputBorder(
@@ -145,7 +145,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () async {
@@ -162,7 +162,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text('保存',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -186,7 +186,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           children: [
             Text(
               widget.exercise.name,
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: kPrimary,
@@ -195,7 +195,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             ),
             Text(
               '強度分析',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 10, color: context.cTextSub),
             ),
           ],
@@ -211,14 +211,14 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Text(
                     '${_bodyWeight.toStringAsFixed(1)}kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: context.cText),
                   ),
                   Text(
                     '体重 ✎',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 9, color: context.cTextSub),
                   ),
                 ],
@@ -240,11 +240,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           const SizedBox(height: 16),
           _buildThresholdTable(),
           const SizedBox(height: 16),
-          _buildHistoryChart(),
-          const SizedBox(height: 16),
-          _buildRatioChart(),
-          const SizedBox(height: 16),
-          _buildVolumeChart(),
+          _buildTrendChart(),
           const SizedBox(height: 16),
           _buildHistogram(),
           const SizedBox(height: 40),
@@ -272,7 +268,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               children: [
                 Text(
                   '現在の推定1RM',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 10,
                       color: context.cTextSub,
                       letterSpacing: 1),
@@ -283,7 +279,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   children: [
                     Text(
                       widget.currentOneRM.toStringAsFixed(1),
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 48,
                         fontWeight: FontWeight.w900,
                         color: context.cText,
@@ -296,7 +292,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(
                         'kg',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 16, color: context.cTextSub),
                       ),
                     ),
@@ -305,7 +301,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '体重比 ${(_result.oneRM / _bodyWeight).toStringAsFixed(2)}x',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 11, color: context.cTextSub),
                 ),
               ],
@@ -326,7 +322,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 const SizedBox(height: 6),
                 Text(
                   tier.label,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: tier.colorForContext(context),
@@ -366,7 +362,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           Text(
             '過去の記録',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: context.cTextSub,
@@ -385,7 +381,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     _historyExpanded
                         ? '閉じる'
                         : 'もっと見る（他 ${sorted.length - _historyCollapsedCount} 件）',
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: kPrimary,
@@ -432,7 +428,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               flex: 3,
               child: Text(
                 formatJpDate(p.dateTime),
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: context.cText,
@@ -444,7 +440,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               child: Text(
                 '${p.setCount}セット',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   color: context.cTextSub,
                 ),
@@ -455,7 +451,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               child: Text(
                 '${p.oneRM.toStringAsFixed(1)}kg',
                 textAlign: TextAlign.right,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: isBest ? kTertiary : kPrimaryLight,
@@ -484,7 +480,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           Text(
             'レベル進捗',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 14),
@@ -516,7 +512,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 child: Text(
                   t.label,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 9,
                     fontWeight: isCurrent
                         ? FontWeight.w700
@@ -535,12 +531,12 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               children: [
                 Text(
                   '${_result.tier.label} 内の進捗',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 10, color: context.cTextSub),
                 ),
                 Text(
                   '${(_result.progressInTier * 100).toStringAsFixed(0)}%',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: _result.tier.colorForContext(context),
@@ -588,7 +584,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Text(
                     'エリート達成！',
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFFFFD700),
@@ -596,7 +592,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   ),
                   Text(
                     '最高ランクに到達しています',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 11, color: context.cTextSub),
                   ),
                 ],
@@ -638,7 +634,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               children: [
                 Text(
                   '次の目標：${nextTier.label}',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 10,
                       color: context.cTextSub,
                       letterSpacing: 0.5),
@@ -649,7 +645,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   children: [
                     Text(
                       next.toStringAsFixed(1),
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
                         color: nextTier.colorForContext(context),
@@ -660,7 +656,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 3, left: 4),
                       child: Text('kg',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                               fontSize: 13,
                               color: context.cTextSub)),
                     ),
@@ -680,14 +676,14 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               children: [
                 Text(
                   '+${diff.toStringAsFixed(1)}',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: nextTier.colorForContext(context),
                   ),
                 ),
                 Text('kg 必要',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 9, color: context.cTextSub)),
               ],
             ),
@@ -711,7 +707,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           Text(
             'レベル別基準（体重 ${_bodyWeight.toStringAsFixed(0)}kg）',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 12),
@@ -742,7 +738,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   const SizedBox(width: 10),
                   Text(
                     t.label,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
@@ -752,7 +748,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   const Spacer(),
                   Text(
                     '${threshold.toStringAsFixed(1)} kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
@@ -770,7 +766,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       ),
                       child: Text(
                         'NOW',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: t.colorForContext(context)),
@@ -800,13 +796,13 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           Text(
             '強度分布ヒストグラム',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 4),
           Text(
             'ユーザーデータによる体重比分布',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 9,
                 color: context.cTextSub.withValues(alpha: 0.5)),
           ),
@@ -830,7 +826,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             const SizedBox(height: 10),
             Text(
               'Coming Soon',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: context.cTextSub.withValues(alpha: 0.4),
@@ -840,7 +836,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             const SizedBox(height: 4),
             Text(
               'ユーザーデータ収集後に公開予定',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 9,
                   color: context.cTextSub.withValues(alpha: 0.28)),
             ),
@@ -850,439 +846,46 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     );
   }
 
-  // ── 1RM 推移グラフ ──────────────────────────────────────────
-  Widget _buildHistoryChart() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '1RM 推移',
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
-          ),
-          const SizedBox(height: 16),
-          if (_history.length < 2)
-            Container(
-              height: 100,
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.show_chart,
-                      size: 32,
-                      color: context.cTextSub.withValues(alpha: 0.3)),
-                  const SizedBox(height: 8),
-                  Text(
-                    _history.isEmpty
-                        ? 'データが蓄積されるとグラフが表示されます'
-                        : 'あと ${2 - _history.length} 回記録するとグラフが表示されます',
-                    style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: context.cTextSub),
-                  ),
-                ],
-              ),
-            )
-          else
-            _buildLineChart(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLineChart() {
-    final spots = _history
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.oneRM))
-        .toList();
-
-    final minY = (_history.map((p) => p.oneRM).reduce((a, b) => a < b ? a : b) * 0.9)
-        .floorToDouble();
-    final maxY = (_history.map((p) => p.oneRM).reduce((a, b) => a > b ? a : b) * 1.1)
-        .ceilToDouble();
-
-    return SizedBox(
-      height: 160,
-      child: LineChart(
-        LineChartData(
-          minX: 0,
-          maxX: (_history.length - 1).toDouble(),
-          minY: minY,
-          maxY: maxY,
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) => FlLine(
-              color: Colors.white.withValues(alpha: 0.06),
-              strokeWidth: 1,
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 44,
-                getTitlesWidget: (v, _) => Text(
-                  '${v.toInt()}',
-                  style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9, color: context.cTextSub),
-                ),
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 24,
-                interval: _history.length <= 6
-                    ? 1
-                    : (_history.length / 4).ceilToDouble(),
-                getTitlesWidget: (v, _) {
-                  final idx = v.toInt();
-                  if (idx < 0 || idx >= _history.length) {
-                    return const SizedBox.shrink();
-                  }
-                  final parts = _history[idx].date.split('-');
-                  final label = '${parts[1]}/${parts[2]}';
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      label,
-                      style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9, color: context.cTextSub),
-                    ),
-                  );
-                },
-              ),
-            ),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: false,
-              curveSmoothness: 0.35,
-              color: kPrimary,
-              barWidth: 2.5,
-              dotData: FlDotData(
-                show: true,
-                getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
-                  radius: 4,
-                  color: kPrimary,
-                  strokeWidth: 2,
-                  strokeColor: context.cCardLow,
-                ),
-              ),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  colors: [
-                    kPrimary.withValues(alpha: 0.18),
-                    kPrimary.withValues(alpha: 0.0),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
+  // ── 推移グラフ（1RM／体重比／総ボリュームを切り替え） ─────────
+  Widget _buildTrendChart() {
+    return TrendChartCard(
+      title: '推移',
+      leftReserved: 48,
+      series: [
+        TrendSeries(
+          label: '1RM',
+          points: [for (final p in _history) TrendPoint(p.dateTime, p.oneRM)],
+          color: kPrimary,
+          formatAxis: (v) => v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1),
+          formatTooltip: (v) => '${v.toStringAsFixed(1)}kg',
+        ),
+        TrendSeries(
+          label: '体重比',
+          subtitle: '1RM ÷ 体重（参考指標）',
+          points: [
+            for (final p in _history)
+              TrendPoint(p.dateTime,
+                  p.oneRM / (p.sessionBodyWeightKg ?? _bodyWeight)),
           ],
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => context.cCardHigh,
-              getTooltipItems: (spots) => spots
-                  .map((s) => LineTooltipItem(
-                        '${s.y.toStringAsFixed(1)}kg',
-                        GoogleFonts.jetBrainsMono(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: kPrimary,
-                        ),
-                      ))
-                  .toList(),
-            ),
-          ),
+          color: kSecondary,
+          formatAxis: (v) => v.toStringAsFixed(2),
+          formatTooltip: (v) => '${v.toStringAsFixed(2)}x',
         ),
-      ),
-    );
-  }
-
-  // ── 体重比推移グラフ ────────────────────────────────────────
-  Widget _buildRatioChart() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '体重比推移（参考指標）',
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '1RM ÷ 体重 ${_bodyWeight.toStringAsFixed(0)}kg',
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 9, color: context.cTextSub.withValues(alpha: 0.5)),
-          ),
-          const SizedBox(height: 16),
-          if (_history.length < 2)
-            _buildChartEmpty()
-          else
-            _buildRatioLineChart(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRatioLineChart() {
-    final spots = _history
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.oneRM / (e.value.sessionBodyWeightKg ?? _bodyWeight)))
-        .toList();
-    final minY = (spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) * 0.9);
-    final maxY = (spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.1);
-
-    return SizedBox(
-      height: 140,
-      child: LineChart(LineChartData(
-        minX: 0,
-        maxX: (_history.length - 1).toDouble(),
-        minY: minY,
-        maxY: maxY,
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) =>
-              FlLine(color: Colors.white.withValues(alpha: 0.06), strokeWidth: 1),
+        TrendSeries(
+          label: 'ボリューム',
+          subtitle: '重量 × 回数 × セット数 (kg)',
+          points: [
+            for (final p in _volumeHistory)
+              TrendPoint(DateTime.parse(p.date), p.volume),
+          ],
+          color: kTertiary,
+          formatAxis: (v) =>
+              v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}t' : v.toStringAsFixed(0),
+          formatTooltip: (v) => v >= 1000
+              ? '${(v / 1000).toStringAsFixed(1)}t'
+              : '${v.toStringAsFixed(0)}kg',
         ),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              getTitlesWidget: (v, _) => Text(
-                v.toStringAsFixed(2),
-                style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub),
-              ),
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 24,
-              interval: _history.length <= 6 ? 1 : (_history.length / 4).ceilToDouble(),
-              getTitlesWidget: (v, _) {
-                final idx = v.toInt();
-                if (idx < 0 || idx >= _history.length) return const SizedBox.shrink();
-                final parts = _history[idx].date.split('-');
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text('${parts[1]}/${parts[2]}',
-                      style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub)),
-                );
-              },
-            ),
-          ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: false,
-            curveSmoothness: 0.35,
-            color: kSecondary,
-            barWidth: 2.5,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
-                radius: 4,
-                color: kSecondary,
-                strokeWidth: 2,
-                strokeColor: context.cCardLow,
-              ),
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                colors: [kSecondary.withValues(alpha: 0.18), kSecondary.withValues(alpha: 0.0)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-        ],
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => context.cCardHigh,
-            getTooltipItems: (spots) => spots
-                .map((s) => LineTooltipItem(
-                      '${s.y.toStringAsFixed(2)}x',
-                      GoogleFonts.jetBrainsMono(
-                          fontSize: 11, fontWeight: FontWeight.w700, color: kSecondary),
-                    ))
-                .toList(),
-          ),
-        ),
-      )),
-    );
-  }
-
-  // ── 総ボリューム推移グラフ ──────────────────────────────────
-  Widget _buildVolumeChart() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '総ボリューム推移',
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '重量 × 回数 × セット数 (kg)',
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 9, color: context.cTextSub.withValues(alpha: 0.5)),
-          ),
-          const SizedBox(height: 16),
-          if (_volumeHistory.length < 2)
-            _buildChartEmpty()
-          else
-            _buildVolumeLineChart(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVolumeLineChart() {
-    final spots = _volumeHistory
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.volume))
-        .toList();
-    final minY = (spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) * 0.9);
-    final maxY = (spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.1);
-
-    return SizedBox(
-      height: 140,
-      child: LineChart(LineChartData(
-        minX: 0,
-        maxX: (_volumeHistory.length - 1).toDouble(),
-        minY: minY,
-        maxY: maxY,
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) =>
-              FlLine(color: Colors.white.withValues(alpha: 0.06), strokeWidth: 1),
-        ),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 48,
-              getTitlesWidget: (v, _) => Text(
-                v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}t' : '${v.toInt()}',
-                style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub),
-              ),
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 24,
-              interval: _volumeHistory.length <= 6 ? 1 : (_volumeHistory.length / 4).ceilToDouble(),
-              getTitlesWidget: (v, _) {
-                final idx = v.toInt();
-                if (idx < 0 || idx >= _volumeHistory.length) return const SizedBox.shrink();
-                final parts = _volumeHistory[idx].date.split('-');
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text('${parts[1]}/${parts[2]}',
-                      style: GoogleFonts.jetBrainsMono(fontSize: 9, color: context.cTextSub)),
-                );
-              },
-            ),
-          ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: false,
-            curveSmoothness: 0.35,
-            color: kTertiary,
-            barWidth: 2.5,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
-                radius: 4,
-                color: kTertiary,
-                strokeWidth: 2,
-                strokeColor: context.cCardLow,
-              ),
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                colors: [kTertiary.withValues(alpha: 0.18), kTertiary.withValues(alpha: 0.0)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-        ],
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => context.cCardHigh,
-            getTooltipItems: (spots) => spots
-                .map((s) => LineTooltipItem(
-                      '${s.y >= 1000 ? (s.y / 1000).toStringAsFixed(1) + "t" : s.y.toStringAsFixed(0) + "kg"}',
-                      GoogleFonts.jetBrainsMono(
-                          fontSize: 11, fontWeight: FontWeight.w700, color: kTertiary),
-                    ))
-                .toList(),
-          ),
-        ),
-      )),
-    );
-  }
-
-  Widget _buildChartEmpty() {
-    return SizedBox(
-      height: 80,
-      child: Center(
-        child: Text(
-          'データが蓄積されるとグラフが表示されます',
-          style: GoogleFonts.jetBrainsMono(fontSize: 11, color: context.cTextSub),
-        ),
-      ),
+      ],
     );
   }
 

@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../theme.dart';
+import '../widgets/trend_chart_card.dart';
 import '../models/workout.dart';
 import '../data/strength_standards.dart';
 import '../services/ad_service.dart';
@@ -29,7 +29,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   // ── ワークアウトストップウォッチ ──────────────────────
   Timer? _stopwatchTimer;
-  Duration _elapsed = Duration.zero;
+  final ValueNotifier<Duration> _elapsedNotifier =
+      ValueNotifier<Duration>(Duration.zero);
   late final AnimationController _pulseController;
 
   // ── リワード広告 ───────────────────────────────────────
@@ -41,6 +42,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     super.initState();
     _loadData();
     SessionManager.instance.addListener(_onSessionChanged);
+    StopwatchService.instance.addListener(_onStopwatchChanged);
     _startStopwatchTick();
     _pulseController = AnimationController(
       vsync: this,
@@ -49,12 +51,27 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     _loadRewardedAd();
   }
 
-  void _onSessionChanged() => _loadData();
+  /// 通知の「リセット」など画面外での操作にも追従する
+  void _onStopwatchChanged() {
+    if (mounted) _updateElapsed();
+  }
+
+  Timer? _sessionReloadDebounce;
+
+  // 入力中は保存が頻発するため、再読み込みはまとめて1回にする
+  void _onSessionChanged() {
+    _sessionReloadDebounce?.cancel();
+    _sessionReloadDebounce =
+        Timer(const Duration(milliseconds: 500), _loadData);
+  }
 
   @override
   void dispose() {
     SessionManager.instance.removeListener(_onSessionChanged);
+    StopwatchService.instance.removeListener(_onStopwatchChanged);
     _stopwatchTimer?.cancel();
+    _sessionReloadDebounce?.cancel();
+    _elapsedNotifier.dispose();
     _pulseController.dispose();
     _rewardedAd?.dispose();
     super.dispose();
@@ -104,20 +121,20 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   void _startStopwatchTick() {
-    _updateElapsed();
+    _elapsedNotifier.value = StopwatchService.instance.elapsed;
     _stopwatchTimer?.cancel();
+    // 毎秒 setState すると画面全体が再構築されるため、経過時間の表示部分だけ更新する
     _stopwatchTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateElapsed();
+      _elapsedNotifier.value = StopwatchService.instance.elapsed;
     });
   }
 
+  /// START/STOP/RESET 押下時：ボタンの状態も変わるので画面全体を更新する
   void _updateElapsed() {
     if (!mounted) return;
-    setState(() {
-      _elapsed = StopwatchService.instance.elapsed;
-    });
+    _elapsedNotifier.value = StopwatchService.instance.elapsed;
+    setState(() {});
   }
-
 
   Future<void> _loadData() async {
     final sessions = await SessionManager.instance.getAllSessions();
@@ -129,12 +146,29 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         _bodyWeight = weight;
         _gender = gender;
         _isLoading = false;
+        _recompute();
       });
     }
   }
 
   // 全セッション + アクティブセッションから種目ごとの最高1RMを返す
-  List<_ExerciseSummary> get _summaries {
+  // ── 計算結果のキャッシュ（データ更新時のみ再計算）─────────────────
+  List<_ExerciseSummary> _summariesCache = [];
+  _ExerciseSummary? _closestCache;
+  Set<MuscleGroup> _coveredCache = {};
+
+  List<_ExerciseSummary> get _summaries => _summariesCache;
+  _ExerciseSummary? get _closestToNextLevel => _closestCache;
+  Set<MuscleGroup> get _coveredGroups => _coveredCache;
+
+  void _recompute() {
+    _summariesCache = _computeSummaries();
+    _closestCache = _computeClosestToNextLevel();
+    _coveredCache = _computeCoveredGroups();
+    _bodyWeightCache = _computeBodyWeightHistory();
+  }
+
+  List<_ExerciseSummary> _computeSummaries() {
     final allExercises = <Exercise>[
       ..._allSessions.expand((s) => s.exercises),
     ];
@@ -165,9 +199,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // 最も次のレベルに近い種目
-  _ExerciseSummary? get _closestToNextLevel {
+  _ExerciseSummary? _computeClosestToNextLevel() {
     final list =
-        _summaries.where((s) => s.result.nextThreshold != null).toList();
+        _summariesCache.where((s) => s.result.nextThreshold != null).toList();
     if (list.isEmpty) return null;
     list.sort((a, b) {
       final ra =
@@ -180,7 +214,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // 体重推移（日付ごと、記録が入力された日の体重値を使用）
-  List<({String date, double weight})> get _bodyWeightHistory {
+  List<({String date, double weight})> _bodyWeightCache = const [];
+  List<({String date, double weight})> get _bodyWeightHistory => _bodyWeightCache;
+
+  List<({String date, double weight})> _computeBodyWeightHistory() {
     final Map<String, double> byDate = {};
     final allSessions = [
       ..._allSessions,
@@ -198,7 +235,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // 部位カバレッジ
-  Set<MuscleGroup> get _coveredGroups {
+  Set<MuscleGroup> _computeCoveredGroups() {
     final exercises = <Exercise>[
       ..._allSessions.expand((s) => s.exercises),
     ];
@@ -215,16 +252,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('体重を設定',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.inter(color: context.cText),
+          style: AppFonts.inter(color: context.cText),
           decoration: InputDecoration(
             suffixText: 'kg',
-            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
+            suffixStyle: AppFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: context.cBorderSub)),
             focusedBorder: UnderlineInputBorder(
@@ -235,18 +272,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('キャンセル',
-                  style: GoogleFonts.inter(color: context.cTextSub))),
+                  style: AppFonts.inter(color: context.cTextSub))),
           TextButton(
             onPressed: () async {
               final v = double.tryParse(ctrl.text);
               if (v != null && v > 0) {
                 await UserPreferences.instance.setBodyWeight(v);
-                if (mounted) setState(() => _bodyWeight = v);
+                if (mounted) {
+                  setState(() {
+                    _bodyWeight = v;
+                    _recompute();
+                  });
+                }
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text('保存',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -265,7 +307,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         elevation: 0,
         title: Text(
           'REP RANK',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w900,
             color: kPrimary,
@@ -283,13 +325,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 children: [
                   Text(
                     '${_bodyWeight.toStringAsFixed(0)}kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: context.cText),
                   ),
                   Text('体重 ✎',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                           fontSize: 9, color: context.cTextSub)),
                 ],
               ),
@@ -333,146 +375,22 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   // ── 体重推移グラフ ─────────────────────────────────────
   Widget _buildBodyWeightChart() {
-    final history = _bodyWeightHistory;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '記録日の体重値',
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: context.cTextSub.withValues(alpha: 0.5)),
-          ),
-          const SizedBox(height: 16),
-          if (history.length < 2)
-            SizedBox(
-              height: 100,
-              child: Center(
-                child: Text(
-                  'データが不足しています',
-                  style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11, color: context.cTextSub),
-                ),
-              ),
-            )
-          else
-            _buildBodyWeightLineChart(history),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBodyWeightLineChart(
-      List<({String date, double weight})> history) {
-    final spots = history
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.weight))
-        .toList();
-    final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 1;
-    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 1;
-
-    return SizedBox(
-      height: 140,
-      child: LineChart(LineChartData(
-        minX: 0,
-        maxX: (history.length - 1).toDouble(),
-        minY: minY,
-        maxY: maxY,
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) => FlLine(
-              color: Colors.white.withValues(alpha: 0.06), strokeWidth: 1),
+    return TrendChartCard(
+      title: '記録日の体重値',
+      leftReserved: 40,
+      emptyMessage: 'データが不足しています',
+      series: [
+        TrendSeries(
+          label: '体重',
+          points: [
+            for (final h in _bodyWeightHistory)
+              TrendPoint(DateTime.parse(h.date), h.weight),
+          ],
+          color: kPrimary,
+          formatAxis: (v) => v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1),
+          formatTooltip: (v) => '${v.toStringAsFixed(1)}kg',
         ),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 36,
-              getTitlesWidget: (v, _) => Text(
-                v.toStringAsFixed(0),
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9, color: context.cTextSub),
-              ),
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 24,
-              interval:
-                  history.length <= 6 ? 1 : (history.length / 4).ceilToDouble(),
-              getTitlesWidget: (v, _) {
-                final idx = v.toInt();
-                if (idx < 0 || idx >= history.length) {
-                  return const SizedBox.shrink();
-                }
-                final parts = history[idx].date.split('-');
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text('${parts[1]}/${parts[2]}',
-                      style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9, color: context.cTextSub)),
-                );
-              },
-            ),
-          ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: false,
-            curveSmoothness: 0.35,
-            color: kPrimary,
-            barWidth: 2.5,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
-                radius: 4,
-                color: kPrimary,
-                strokeWidth: 2,
-                strokeColor: context.cCardLow,
-              ),
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                colors: [
-                  kPrimary.withValues(alpha: 0.18),
-                  kPrimary.withValues(alpha: 0.0),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-        ],
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => context.cCardHigh,
-            getTooltipItems: (spots) => spots
-                .map((s) => LineTooltipItem(
-                      '${s.y.toStringAsFixed(1)}kg',
-                      GoogleFonts.jetBrainsMono(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: kPrimary),
-                    ))
-                .toList(),
-          ),
-        ),
-      )),
+      ],
     );
   }
 
@@ -535,7 +453,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               const SizedBox(width: 10),
               Text(
                 'ストップウォッチ',
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: kPrimaryLight,
@@ -548,21 +466,24 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           // 経過時間（64px 大画面表示）
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              formatHMS(_elapsed),
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 64,
-                fontWeight: FontWeight.w800,
-                color: kPrimaryLight,
-                letterSpacing: -1,
-                height: 1,
+            child: ValueListenableBuilder<Duration>(
+              valueListenable: _elapsedNotifier,
+              builder: (_, elapsed, __) => Text(
+                formatHMS(elapsed),
+                style: AppFonts.jetBrainsMono(
+                  fontSize: 64,
+                  fontWeight: FontWeight.w800,
+                  color: kPrimaryLight,
+                  letterSpacing: -1,
+                  height: 1,
+                ),
               ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             '経過時間',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 10,
               color: context.cTextSub,
               letterSpacing: 1.5,
@@ -651,7 +572,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               const SizedBox(width: 6),
               Text(
                 label,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: fgColor,
@@ -675,7 +596,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           const SizedBox(height: 14),
           Text(
             'まだデータがありません',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: context.cTextSub,
@@ -684,7 +605,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           const SizedBox(height: 6),
           Text(
             '＋ボタンからトレーニングを開始',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 12,
               color: context.cTextSub.withValues(alpha: 0.6),
             ),
@@ -718,14 +639,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('総合レベル',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 10,
                         color: context.cTextSub,
                         letterSpacing: 1)),
                 const SizedBox(height: 8),
                 Text(
                   topTier.label,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     color: topTier.colorForContext(context),
@@ -783,7 +704,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
           Text(label,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 10, color: color, fontWeight: FontWeight.w600)),
         ],
       ),
@@ -813,7 +734,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('部位カバレッジ',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 10,
                   color: context.cTextSub,
                   letterSpacing: 1)),
@@ -847,7 +768,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   const SizedBox(height: 4),
                   Text(
                     g.label,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 9,
                       color: hit ? context.cText : context.cTextSub.withValues(alpha: 0.4),
                     ),
@@ -878,7 +799,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('最も近い目標',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 10,
                   color: context.cTextSub,
                   letterSpacing: 1)),
@@ -902,14 +823,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   children: [
                     Text(
                       s.exercise.name,
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: context.cText),
                     ),
                     Text(
                       '${s.result.tier.label} → ${nextTier.label}',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                           fontSize: 11, color: context.cTextSub),
                     ),
                   ],
@@ -920,7 +841,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 children: [
                   Text(
                     '${next.toStringAsFixed(1)}kg',
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
                       color: nextTier.colorForContext(context),
@@ -929,7 +850,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   ),
                   Text(
                     'あと +${diff.toStringAsFixed(1)}kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 10, color: context.cTextSub),
                   ),
                 ],
@@ -955,23 +876,55 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   Widget _buildSectionHeader(String title) {
     return Text(
       title.toUpperCase(),
-      style: GoogleFonts.jetBrainsMono(
+      style: AppFonts.jetBrainsMono(
           fontSize: 10, color: context.cTextSub, letterSpacing: 1.5),
     );
   }
 
+  static const _groupOrder = [
+    MuscleGroup.chest,
+    MuscleGroup.back,
+    MuscleGroup.legs,
+    MuscleGroup.shoulders,
+    MuscleGroup.arms,
+    MuscleGroup.abs,
+  ];
+
+  /// 部位ごとにセクション分けして表示する（各部位内は1RM降順のまま）。
   Widget _buildExerciseGrid(List<_ExerciseSummary> summaries) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.35,
-      ),
-      itemCount: summaries.length,
-      itemBuilder: (_, i) => _buildExerciseCard(summaries[i]),
+    final sections = <Widget>[];
+    for (final group in _groupOrder) {
+      final items =
+          summaries.where((s) => s.exercise.muscleGroup == group).toList();
+      if (items.isEmpty) continue;
+      sections.add(Padding(
+        padding: EdgeInsets.only(top: sections.isEmpty ? 0 : 16, bottom: 8),
+        child: Text(
+          group.label,
+          style: AppFonts.jetBrainsMono(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: kPrimary,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ));
+      sections.add(GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.35,
+        ),
+        itemCount: items.length,
+        itemBuilder: (_, i) => _buildExerciseCard(items[i]),
+      ));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sections,
     );
   }
 
@@ -1013,7 +966,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   ),
                   child: Text(
                     tier.label,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: tier.colorForContext(context),
@@ -1027,7 +980,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               children: [
                 Text(
                   s.exercise.name,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: context.cText,
@@ -1040,7 +993,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   children: [
                     Text(
                       s.maxRM.toStringAsFixed(1),
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: context.cText,
@@ -1051,7 +1004,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     Padding(
                       padding: const EdgeInsets.only(bottom: 2, left: 2),
                       child: Text('kg',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                               fontSize: 11, color: context.cTextSub)),
                     ),
                   ],
@@ -1095,7 +1048,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             const SizedBox(width: 8),
             Text(
               isReady ? '広告を見て応援する' : '広告を準備中...',
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: isReady ? kPrimary : context.cTextSub,

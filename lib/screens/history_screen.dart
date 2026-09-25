@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
 import '../utils/time_format.dart';
-import 'daily_detail_screen.dart';
+import 'exercise_record_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -68,7 +68,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         elevation: 0,
         title: Text(
           'WORKOUT',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: kPrimary,
@@ -143,11 +143,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 controller: ctrl,
                 focusNode: focusNode,
                 onSubmitted: (_) => onSubmitted(),
-                style: GoogleFonts.inter(fontSize: 14, color: context.cText),
+                style: AppFonts.inter(fontSize: 14, color: context.cText),
                 decoration: InputDecoration(
                   hintText: '種目を検索...',
                   hintStyle:
-                      GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
+                      AppFonts.inter(fontSize: 14, color: context.cTextSub),
                   prefixIcon:
                       Icon(Icons.search, color: context.cTextSub),
                   border: InputBorder.none,
@@ -179,7 +179,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
                           child: Text(
                             '最近の記録',
-                            style: GoogleFonts.jetBrainsMono(
+                            style: AppFonts.jetBrainsMono(
                               fontSize: 9,
                               color: context.cTextSub,
                               letterSpacing: 1.2,
@@ -212,7 +212,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     const SizedBox(width: 10),
                                     Text(
                                       option,
-                                      style: GoogleFonts.inter(
+                                      style: AppFonts.inter(
                                           fontSize: 14, color: context.cText),
                                     ),
                                   ],
@@ -234,7 +234,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           InputChip(
             label: Text(
               _searchFilter!,
-              style: GoogleFonts.inter(fontSize: 12, color: kPrimary),
+              style: AppFonts.inter(fontSize: 12, color: kPrimary),
             ),
             backgroundColor: kPrimary.withValues(alpha: 0.12),
             side: BorderSide(color: kPrimary.withValues(alpha: 0.3)),
@@ -271,7 +271,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             children: [
               Text(
                 '$year年$month月',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: context.cText),
@@ -292,7 +292,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               return Expanded(
                 child: Text(d,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 11, color: context.cTextSub)),
               );
             }).toList(),
@@ -351,13 +351,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     return GestureDetector(
-      onTap: () {
-        setState(() => _selectedDay = day);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DailyDetailScreen(date: day)),
-        ).then((_) => _loadSessions()); // 戻ったらリフレッシュ
-      },
+      onTap: () => setState(() => _selectedDay = day),
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
@@ -370,7 +364,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           children: [
             Text(
               '${day.day}',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 12,
                 fontWeight:
                     (isSelected || isToday) ? FontWeight.w700 : FontWeight.w400,
@@ -404,12 +398,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
       children: [
         Text(
           '${day.month}月${day.day}日($weekday)',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
               fontSize: 16, fontWeight: FontWeight.w700, color: context.cText),
         ),
         Text(
           '継続日数: $streak 日',
-          style: GoogleFonts.jetBrainsMono(
+          style: AppFonts.jetBrainsMono(
               fontSize: 11, color: kPrimary, letterSpacing: 1),
         ),
       ],
@@ -432,7 +426,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             child: Text(
               'この日のトレーニング記録はありません',
               style:
-                  GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
+                  AppFonts.inter(fontSize: 13, color: context.cTextSub),
             ),
           ),
         ),
@@ -480,22 +474,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '記録を削除',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: context.cText),
+          style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText),
         ),
         content: Text(
           '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
-          style: GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
+          style: AppFonts.inter(fontSize: 14, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('削除',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: Colors.red.shade400, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -512,21 +506,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final exerciseNames =
         session.exercises.map((e) => e.name).join(', ');
 
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => DailyDetailScreen(date: session.date),
-        ),
-      ).then((_) => _loadSessions()),
-      child: Container(
+    return Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: context.cCardLow,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+        Row(
           children: [
             Container(
               width: 52,
@@ -547,14 +537,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     children: [
                       Text(
                         session.sessionName ?? '記録',
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: context.cText),
                       ),
                       Text(
                         startLabel,
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 10, color: context.cTextSub),
                       ),
                     ],
@@ -564,7 +554,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     exerciseNames,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                         fontSize: 12, color: context.cTextSub),
                   ),
                   const SizedBox(height: 6),
@@ -574,7 +564,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       const SizedBox(width: 4),
                       Text(
                         '${volume.toStringAsFixed(0)} kg',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 11, color: context.cText),
                       ),
                       if (duration != null) ...[
@@ -584,7 +574,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         const SizedBox(width: 4),
                         Text(
                           '${duration.inMinutes} 分',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                               fontSize: 11, color: context.cText),
                         ),
                       ],
@@ -593,8 +583,60 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, color: context.cBorder, size: 20),
+          ],
+        ),
+            if (session.exercises.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Divider(height: 1, color: context.cCardHigh),
+              const SizedBox(height: 6),
+              for (final e in session.exercises) _exerciseRow(session, e),
+            ],
+          ],
+        ),
+    );
+  }
+
+  /// 種目1行。タップでその種目の記録画面へ遷移する。
+  Widget _exerciseRow(WorkoutSession session, Exercise e) {
+    final best = e.sets.isEmpty
+        ? 0.0
+        : e.sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ExerciseRecordScreen(exercise: e, sessionId: session.id),
+        ),
+      ).then((_) => _loadSessions()),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                e.name,
+                style: AppFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: context.cText),
+              ),
+            ),
+            Text(
+              '${e.sets.length}セット',
+              style: AppFonts.jetBrainsMono(
+                  fontSize: 11, color: context.cTextSub),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '${best.toStringAsFixed(1)}kg',
+              style: AppFonts.jetBrainsMono(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: kPrimaryLight),
+            ),
+            Icon(Icons.chevron_right, color: context.cBorder, size: 18),
           ],
         ),
       ),
@@ -616,7 +658,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       children: [
         Text(
           'MONTHLY OVERVIEW',
-          style: GoogleFonts.jetBrainsMono(
+          style: AppFonts.jetBrainsMono(
             fontSize: 10,
             color: context.cTextSub,
             letterSpacing: 1.2,
@@ -714,13 +756,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 9,
                   color: context.cTextSub,
                   letterSpacing: 0.8)),
           const SizedBox(height: 4),
           Text(value,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: valueColor)),
@@ -731,7 +773,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 Icon(Icons.trending_up, size: 11, color: subColor),
                 const SizedBox(width: 2),
                 Text(sub,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 9, color: subColor)),
               ],
             ),

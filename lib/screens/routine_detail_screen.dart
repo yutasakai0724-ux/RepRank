@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
@@ -65,7 +65,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         ),
         title: Text(
           _routineName.toUpperCase(),
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 17,
             fontWeight: FontWeight.w900,
             color: kPrimary,
@@ -87,7 +87,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                 children: [
                   Text(
                     'EXERCISES',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 10,
                       color: context.cTextSub,
                       letterSpacing: 1.5,
@@ -97,7 +97,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     onTap: () => setState(() => _isEditMode = !_isEditMode),
                     child: Text(
                       _isEditMode ? '完了' : '編集',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: _isEditMode ? kTertiary : kPrimary,
@@ -139,7 +139,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
               children: [
                 Text(
                   'NEXT ROUTINE',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 9,
                     color: context.cTextSub,
                     letterSpacing: 1.5,
@@ -148,7 +148,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                 const SizedBox(height: 6),
                 Text(
                   _routineName.toUpperCase(),
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: context.cText,
@@ -163,7 +163,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     const SizedBox(width: 4),
                     Text(
                       _duration,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                           fontSize: 11, color: context.cText),
                     ),
                     const SizedBox(width: 14),
@@ -171,7 +171,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     const SizedBox(width: 4),
                     Text(
                       '${_exerciseNames.length} 種目',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                           fontSize: 11, color: context.cText),
                     ),
                   ],
@@ -240,7 +240,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     Expanded(
                       child: Text(
                         name,
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: _isEditMode ? context.cTextSub : context.cText,
@@ -297,7 +297,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
             const SizedBox(width: 6),
             Text(
               '種目を追加',
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: kPrimary,
@@ -354,7 +354,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'ワークアウト開始',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/auth_service.dart';
@@ -148,17 +148,17 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
           backgroundColor: context.cCardLow,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('種目を追加',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+              style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
                 autofocus: true,
-                style: GoogleFonts.inter(color: context.cText),
+                style: AppFonts.inter(color: context.cText),
                 decoration: InputDecoration(
                   hintText: '種目名',
-                  hintStyle: GoogleFonts.inter(color: context.cTextSub),
+                  hintStyle: AppFonts.inter(color: context.cTextSub),
                   enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: context.cBorderSub)),
                   focusedBorder: UnderlineInputBorder(
@@ -170,7 +170,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 decoration: InputDecoration(
                   labelText: '部位',
                   labelStyle:
-                      GoogleFonts.inter(color: context.cTextSub, fontSize: 12),
+                      AppFonts.inter(color: context.cTextSub, fontSize: 12),
                   enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: context.cBorderSub)),
                 ),
@@ -179,7 +179,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                   isExpanded: true,
                   dropdownColor: context.cCardLow,
                   underline: const SizedBox.shrink(),
-                  style: GoogleFonts.inter(color: context.cText, fontSize: 14),
+                  style: AppFonts.inter(color: context.cText, fontSize: 14),
                   items: _groupOrder
                       .map((g) => DropdownMenuItem(value: g, child: Text(g.label)))
                       .toList(),
@@ -192,7 +192,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('キャンセル',
-                  style: GoogleFonts.inter(color: context.cTextSub)),
+                  style: AppFonts.inter(color: context.cTextSub)),
             ),
             TextButton(
               onPressed: () async {
@@ -206,7 +206,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 }
               },
               child: Text('追加',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                       color: kPrimary, fontWeight: FontWeight.w700)),
             ),
           ],
@@ -263,7 +263,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
             Expanded(
               child: Text(
                 name,
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: isMarked ? context.cTextSub : context.cText,
@@ -303,7 +303,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
         padding: const EdgeInsets.symmetric(vertical: 32),
         child: Center(
           child: Text('該当する種目が見つかりません',
-              style: GoogleFonts.inter(fontSize: 13, color: context.cTextSub)),
+              style: AppFonts.inter(fontSize: 13, color: context.cTextSub)),
         ),
       );
     }
@@ -338,7 +338,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               tilePadding: const EdgeInsets.symmetric(horizontal: 4),
               title: Text(
                 group.label,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: kPrimary,
@@ -394,7 +394,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
           padding: const EdgeInsets.only(top: 8, bottom: 6),
           child: Text(
             'お気に入り',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: const Color(0xFFFFB300),
@@ -465,7 +465,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 children: [
                   Text(
                     widget.title,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: context.cText,
@@ -476,7 +476,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                     icon: const Icon(Icons.add, size: 16, color: kPrimary),
                     label: Text(
                       '種目を追加',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: kPrimary,
@@ -495,11 +495,11 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: TextField(
                 controller: _searchCtrl,
-                style: GoogleFonts.inter(fontSize: 14, color: context.cText),
+                style: AppFonts.inter(fontSize: 14, color: context.cText),
                 onChanged: (v) => setState(() => _searchQuery = v.trim()),
                 decoration: InputDecoration(
                   hintText: '種目を検索...',
-                  hintStyle: GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
+                  hintStyle: AppFonts.inter(fontSize: 14, color: context.cTextSub),
                   prefixIcon: Icon(Icons.search, size: 18, color: context.cTextSub),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? GestureDetector(
@@ -540,7 +540,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                             padding: const EdgeInsets.only(top: 8, bottom: 6),
                             child: Text(
                               'ルーチン種目',
-                              style: GoogleFonts.jetBrainsMono(
+                              style: AppFonts.jetBrainsMono(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: kPrimary,

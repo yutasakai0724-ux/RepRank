@@ -1,10 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'live_activity_service.dart';
 import 'notification_service.dart';
 
 /// 単純なストップウォッチサービス（シングルトン）。
 /// セッション状態とは完全に独立して動作する。
 /// 画面が破棄されても状態が保持されるよう、シングルトンで管理。
-class StopwatchService {
+class StopwatchService extends ChangeNotifier {
   StopwatchService._();
   static final StopwatchService instance = StopwatchService._();
 
@@ -30,6 +31,7 @@ class StopwatchService {
     final virtualStart = DateTime.now().subtract(_accumulated);
     NotificationService.instance.showStopwatchOngoing(virtualStart);
     LiveActivityService.instance.startStopwatch(virtualStart);
+    notifyListeners();
   }
 
   void stop() {
@@ -39,6 +41,7 @@ class StopwatchService {
     _runStartTime = null;
     NotificationService.instance.cancelStopwatchOngoing();
     LiveActivityService.instance.endStopwatch();
+    notifyListeners();
   }
 
   void reset() {
@@ -47,5 +50,6 @@ class StopwatchService {
     _accumulated = Duration.zero;
     NotificationService.instance.cancelStopwatchOngoing();
     LiveActivityService.instance.endStopwatch();
+    notifyListeners();
   }
 }

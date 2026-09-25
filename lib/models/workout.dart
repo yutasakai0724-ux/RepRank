@@ -38,7 +38,7 @@ class WorkoutSet {
   }) : id = id ?? _uuid.v4();
 
   double get oneRM {
-    if (reps <= 0) return weight;
+    if (reps <= 1) return weight;
     return weight * reps / 40 + weight;
   }
 
@@ -115,6 +115,9 @@ class WorkoutSession {
   List<Exercise> exercises;
   double? bodyWeightKg;
 
+  /// 最終更新日時。ログイン時のクラウドとの同期で、新しい方を採用するために使う。
+  DateTime? updatedAt;
+
   WorkoutSession({
     String? id,
     this.sessionName,
@@ -124,6 +127,7 @@ class WorkoutSession {
     this.finishedAt,
     List<Exercise>? exercises,
     this.bodyWeightKg,
+    this.updatedAt,
   }) : id = id ?? _uuid.v4(),
        exercises = exercises ?? [];
 
@@ -148,6 +152,7 @@ class WorkoutSession {
     'finishedAt': finishedAt?.toIso8601String(),
     'exercises': exercises.map((e) => e.toJson()).toList(),
     'bodyWeightKg': bodyWeightKg,
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory WorkoutSession.fromJson(Map<String, dynamic> j) => WorkoutSession(
@@ -163,6 +168,9 @@ class WorkoutSession {
         .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
         .toList(),
     bodyWeightKg: (j['bodyWeightKg'] as num?)?.toDouble(),
+    updatedAt: j['updatedAt'] != null
+        ? DateTime.parse(j['updatedAt'] as String)
+        : null,
   );
 }
 
