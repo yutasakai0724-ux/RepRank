@@ -7,6 +7,7 @@ import '../data/strength_standards.dart';
 import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
+import 'exercise_record_screen.dart';
 
 class ExerciseAnalysisScreen extends StatefulWidget {
   final Exercise exercise;
@@ -29,6 +30,9 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   late StrengthResult _result;
   List<_RMPoint> _history = [];
   List<_VolumePoint> _volumeHistory = [];
+  bool _historyExpanded = false;
+
+  static const int _historyCollapsedCount = 5;
 
   @override
   void initState() {
@@ -54,8 +58,13 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     final Map<String, double> byDate = {};
     final Map<String, double?> bwByDate = {};
     final Map<String, double> volByDate = {};
+    final Map<String, DateTime> dateTimeByDate = {};
+    final Map<String, int> setCountByDate = {};
+    final Map<String, String> sessionIdByDate = {};
+    final Map<String, Exercise> exerciseByDate = {};
     for (final s in sessions) {
       final dateKey = formatYMD(s.date);
+      dateTimeByDate[dateKey] = s.date;
       for (final ex in s.exercises) {
         if (ex.name != widget.exercise.name) continue;
         if (ex.sets.isEmpty) continue;
@@ -63,13 +72,24 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         if (maxRM > (byDate[dateKey] ?? 0)) {
           byDate[dateKey] = maxRM;
           bwByDate[dateKey] = s.bodyWeightKg;
+          setCountByDate[dateKey] = ex.sets.length;
+          sessionIdByDate[dateKey] = s.id;
+          exerciseByDate[dateKey] = ex;
         }
         final vol = ex.sets.fold(0.0, (sum, s) => sum + s.weight * s.reps);
         volByDate[dateKey] = (volByDate[dateKey] ?? 0) + vol;
       }
     }
     final points = byDate.entries
-        .map((e) => _RMPoint(date: e.key, oneRM: e.value, sessionBodyWeightKg: bwByDate[e.key]))
+        .map((e) => _RMPoint(
+              date: e.key,
+              dateTime: dateTimeByDate[e.key]!,
+              oneRM: e.value,
+              setCount: setCountByDate[e.key] ?? 0,
+              sessionBodyWeightKg: bwByDate[e.key],
+              sessionId: sessionIdByDate[e.key]!,
+              exercise: exerciseByDate[e.key]!,
+            ))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
     final volPoints = volByDate.entries
@@ -212,6 +232,8 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           _buildCurrentRM(),
           const SizedBox(height: 16),
+          _buildHistoryList(),
+          const SizedBox(height: 16),
           _buildLevelBar(),
           const SizedBox(height: 16),
           _buildNextGoalCard(),
@@ -314,6 +336,136 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── 過去の記録一覧 ───────────────────────────────────────────
+  Widget _buildHistoryList() {
+    if (_history.isEmpty) return const SizedBox.shrink();
+
+    // 新しい順に並べ替え
+    final sorted = List<_RMPoint>.from(_history)
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    final bestOneRM =
+        sorted.map((p) => p.oneRM).reduce((a, b) => a > b ? a : b);
+    final visible = _historyExpanded
+        ? sorted
+        : sorted.take(_historyCollapsedCount).toList();
+    final hasMore = sorted.length > _historyCollapsedCount;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.cCardLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '過去の記録',
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: context.cTextSub,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final p in visible) _buildHistoryRow(p, isBest: p.oneRM == bestOneRM),
+          if (hasMore)
+            GestureDetector(
+              onTap: () => setState(() => _historyExpanded = !_historyExpanded),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Center(
+                  child: Text(
+                    _historyExpanded
+                        ? '閉じる'
+                        : 'もっと見る（他 ${sorted.length - _historyCollapsedCount} 件）',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryRow(_RMPoint p, {required bool isBest}) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ExerciseRecordScreen(
+            exercise: p.exercise,
+            sessionId: p.sessionId,
+          ),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isBest
+              ? kTertiary.withValues(alpha: 0.1)
+              : context.cCardHigh.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: isBest
+              ? Border.all(color: kTertiary.withValues(alpha: 0.4))
+              : null,
+        ),
+        child: Row(
+          children: [
+            if (isBest) ...[
+              const Icon(Icons.star, size: 14, color: kTertiary),
+              const SizedBox(width: 6),
+            ],
+            Expanded(
+              flex: 3,
+              child: Text(
+                formatJpDate(p.dateTime),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: context.cText,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '${p.setCount}セット',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  color: context.cTextSub,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                '${p.oneRM.toStringAsFixed(1)}kg',
+                textAlign: TextAlign.right,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isBest ? kTertiary : kPrimaryLight,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 16, color: context.cBorder),
+          ],
+        ),
       ),
     );
   }
@@ -818,7 +970,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           lineBarsData: [
             LineChartBarData(
               spots: spots,
-              isCurved: true,
+              isCurved: false,
               curveSmoothness: 0.35,
               color: kPrimary,
               barWidth: 2.5,
@@ -954,7 +1106,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         lineBarsData: [
           LineChartBarData(
             spots: spots,
-            isCurved: true,
+            isCurved: false,
             curveSmoothness: 0.35,
             color: kSecondary,
             barWidth: 2.5,
@@ -1083,7 +1235,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         lineBarsData: [
           LineChartBarData(
             spots: spots,
-            isCurved: true,
+            isCurved: false,
             curveSmoothness: 0.35,
             color: kTertiary,
             barWidth: 2.5,
@@ -1147,9 +1299,21 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
 
 class _RMPoint {
   final String date;
+  final DateTime dateTime;
   final double oneRM;
+  final int setCount;
   final double? sessionBodyWeightKg;
-  const _RMPoint({required this.date, required this.oneRM, this.sessionBodyWeightKg});
+  final String sessionId;
+  final Exercise exercise;
+  const _RMPoint({
+    required this.date,
+    required this.dateTime,
+    required this.oneRM,
+    required this.setCount,
+    required this.sessionId,
+    required this.exercise,
+    this.sessionBodyWeightKg,
+  });
 }
 
 class _VolumePoint {

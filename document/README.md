@@ -8,6 +8,7 @@
 | [test_checklist.md](test_checklist.md) | 手動テスト確認項目チェックリスト |
 | [build_guide.md](build_guide.md) | 目的別ビルド方法早見表（シミュレータ確認・実機・提出用） |
 | [CHANGELOG.md](CHANGELOG.md) | バージョンごとの変更履歴 |
+| [git_guide.md](git_guide.md) | Git の基本操作・ブランチ運用・コミットメッセージの慣習 |
 
 ## リリース手順
 

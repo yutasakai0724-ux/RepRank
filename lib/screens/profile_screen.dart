@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:app_settings/app_settings.dart' as os_settings;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -119,7 +120,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         title: Text(
-          'PROFILE',
+          '設定',
           style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
@@ -281,8 +282,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return _buildCard(
       children: [
         _switchRow(
-          label: '休憩タイマー終了通知',
-          sub: 'タイマーが0になると通知を送信',
+          label: 'トレーニング通知',
+          sub: 'トレーニング時間・休憩タイマーの通知を使用',
           value: _restNotification,
           onChanged: (v) async {
             if (v) {
@@ -293,6 +294,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
             await UserPreferences.instance.setRestNotification(v);
             if (mounted) setState(() => _restNotification = v);
           },
+        ),
+        Divider(height: 1, color: context.cCardHigh),
+        InkWell(
+          onTap: () => os_settings.AppSettings.openAppSettings(
+            type: os_settings.AppSettingsType.notification,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('端末の通知設定を開く',
+                      style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: context.cText)),
+                ),
+                Icon(Icons.chevron_right, size: 20, color: context.cTextSub),
+              ],
+            ),
+          ),
         ),
       ],
     );

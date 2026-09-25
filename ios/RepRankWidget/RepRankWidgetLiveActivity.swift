@@ -67,7 +67,7 @@ struct LockScreenView: View {
                 .foregroundColor(.orange)
                 .font(.title2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(kind == "stopwatch" ? "ワークアウト計測中" : "休憩タイマー")
+                Text(kind == "stopwatch" ? "ワークアウト計測中" : (exerciseName ?? "休憩タイマー"))
                     .font(.caption)
                     .foregroundColor(.gray)
                 ContentView(context: context)
@@ -81,6 +81,10 @@ struct LockScreenView: View {
 
     private var kind: String {
         sharedDefaults.string(forKey: context.attributes.prefixedKey("kind")) ?? "rest"
+    }
+
+    private var exerciseName: String? {
+        sharedDefaults.string(forKey: context.attributes.prefixedKey("exerciseName"))
     }
 }
 

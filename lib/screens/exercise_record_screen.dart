@@ -48,9 +48,13 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   // RestTimerService はグローバル singleton。タイマーUIの再描画用タイマー。
   Timer? _uiRefreshTimer;
 
+  /// この画面（種目）に対応する休憩タイマーのキー。
+  late final String _timerKey;
+
   @override
   void initState() {
     super.initState();
+    _timerKey = RestTimerService.keyFor(widget.exercise.name);
     _sets = List.generate(
       widget.exercise.sets.length,
       (i) => WorkoutSet(
@@ -78,8 +82,12 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
     // RestTimerService の変更を受け取るリスナー登録
     RestTimerService.instance.addListener(_onTimerChanged);
-    // この画面にタイマーUIがあるため、全画面共通オーバーレイは抑制する
-    RestTimerService.instance.suppressOverlay();
+    // この画面にタイマーUIがあるため、この種目分だけ全画面共通オーバーレイを抑制する。
+    // suppressOverlay() は notifyListeners() を呼ぶため、initState（ビルド中）から
+    // 直接呼ぶと「setState() called during build」になる。次フレームに遅延させる。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      RestTimerService.instance.suppressOverlay(_timerKey);
+    });
 
     // 新規追加時（sessionId 未指定）はアクティブセッションを作成
     // 種目は実際にデータが入力された時のみ保存する（選択だけで記録にならないよう）
@@ -203,13 +211,13 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   Future<void> _loadRestDuration() async {
     final saved = await UserPreferences.instance.getRestDuration();
-    RestTimerService.instance.setDuration(saved);
+    RestTimerService.instance.setDuration(widget.exercise, widget.sessionId, saved);
   }
 
   @override
   void dispose() {
     RestTimerService.instance.removeListener(_onTimerChanged);
-    RestTimerService.instance.unsuppressOverlay();
+    RestTimerService.instance.unsuppressOverlay(_timerKey);
     _saveDebounce?.cancel();
     _uiRefreshTimer?.cancel();
     for (final c in _weightCtrl) {
@@ -306,6 +314,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   Future<void> _showDurationPicker() async {
     final timer = RestTimerService.instance;
+    final currentDuration = timer.entryFor(_timerKey)?.durationSec ?? 60;
     final result = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: context.cCardLow,
@@ -313,10 +322,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       isScrollControlled: true,
-      builder: (ctx) => DurationPickerSheet(currentSec: timer.durationSec),
+      builder: (ctx) => DurationPickerSheet(currentSec: currentDuration),
     );
     if (result != null && result > 0 && mounted) {
-      timer.setDuration(result);
+      timer.setDuration(widget.exercise, widget.sessionId, result);
       await UserPreferences.instance.setRestDuration(result);
     }
   }
@@ -679,9 +688,12 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         controller: _exerciseMemoCtrl,
         maxLines: null,
         minLines: 1,
+        keyboardType: TextInputType.multiline,
+        textInputAction: TextInputAction.newline,
         style: GoogleFonts.inter(fontSize: 13, color: context.cText),
         decoration: InputDecoration(
           isDense: true,
+          filled: false,
           border: InputBorder.none,
           icon: Icon(Icons.sticky_note_2_outlined,
               size: 16, color: context.cTextSub),
@@ -696,11 +708,12 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   // ── 休憩タイマー ──────────────────────────────────────
 
   Widget _buildRestTimer() {
-    final timer = RestTimerService.instance;
-    final isRunning = timer.state == RestState.running;
-    final isPaused  = timer.state == RestState.paused;
-    final isFinished = timer.state == RestState.finished;
-    final isIdle    = timer.state == RestState.idle;
+    final entry = RestTimerService.instance.entryFor(_timerKey);
+    final state = entry?.state ?? RestState.idle;
+    final isRunning = state == RestState.running;
+    final isPaused  = state == RestState.paused;
+    final isFinished = state == RestState.finished;
+    final isIdle    = state == RestState.idle;
 
     final borderColor = isFinished
         ? kTertiary
@@ -743,7 +756,8 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   }
 
   List<Widget> _restIdleContent() {
-    final timer = RestTimerService.instance;
+    final durationSec =
+        RestTimerService.instance.entryFor(_timerKey)?.durationSec ?? 60;
     return [
       Text(
         '休憩タイマー',
@@ -766,7 +780,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                formatMMSS(timer.durationSec),
+                formatMMSS(durationSec),
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -781,7 +795,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       const Spacer(),
       GestureDetector(
-        onTap: () => RestTimerService.instance.start(),
+        onTap: () => RestTimerService.instance.start(widget.exercise, widget.sessionId),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
@@ -810,7 +824,8 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   }
 
   List<Widget> _restRunningContent(bool isPaused) {
-    final remaining = RestTimerService.instance.remainingSec;
+    final remaining =
+        RestTimerService.instance.entryFor(_timerKey)?.remainingSec ?? 0;
     return [
       Text(
         formatMMSS(remaining),
@@ -833,8 +848,8 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       const Spacer(),
       GestureDetector(
         onTap: isPaused
-            ? () => RestTimerService.instance.resume()
-            : () => RestTimerService.instance.pause(),
+            ? () => RestTimerService.instance.resume(_timerKey)
+            : () => RestTimerService.instance.pause(_timerKey),
         child: Container(
           width: 34,
           height: 34,
@@ -851,7 +866,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         ),
       ),
       GestureDetector(
-        onTap: () => RestTimerService.instance.stop(),
+        onTap: () => RestTimerService.instance.stop(_timerKey),
         child: Container(
           width: 34,
           height: 34,
@@ -877,7 +892,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       const Spacer(),
       GestureDetector(
-        onTap: () => RestTimerService.instance.stop(),
+        onTap: () => RestTimerService.instance.stop(_timerKey),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
@@ -970,10 +985,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               // 重量入力（小さめ）
               Expanded(
                 flex: 3,
-                child: _weightInput(i),
+                child: SizedBox(height: _inputRowHeight, child: _weightInput(i)),
               ),
               const SizedBox(width: 8),
-              // 回数 ± カウンター（キーボード入力も可）
+              // 回数 ± カウンター（キーボード入力も可、1RM推定近くまで幅を使う）
               Expanded(
                 flex: 4,
                 child: _repsCounter(i),
@@ -1020,9 +1035,14 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             padding: const EdgeInsets.only(left: 28),
             child: TextField(
               controller: _setMemoCtrl[i],
+              maxLines: null,
+              minLines: 1,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
               style: GoogleFonts.inter(fontSize: 11, color: context.cTextSub),
               decoration: InputDecoration(
                 isDense: true,
+                filled: false,
                 border: InputBorder.none,
                 hintText: 'セットメモ',
                 hintStyle:
@@ -1055,6 +1075,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     _triggerSave();
   }
 
+  // 重量入力・回数エリアで高さを揃えるための共通値
+  static const double _inputRowHeight = 38;
+
   Widget _weightInput(int i) {
     return TextField(
       controller: _weightCtrl[i],
@@ -1067,10 +1090,14 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       decoration: InputDecoration(
         filled: true,
-        fillColor: context.cCardTop.withValues(alpha: 0.5),
+        fillColor: context.cCardTop,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: context.cBorderSub),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: context.cBorderSub),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -1097,39 +1124,49 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   Widget _repsCounter(int i) {
     final reps = _sets[i].reps;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _counterBtn(
           icon: Icons.remove,
           onTap: reps > 0 ? () => _setReps(i, reps - 1) : null,
         ),
-        SizedBox(
-          width: 36,
-          child: TextField(
-            controller: _repsCtrl[i],
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: reps > 0 ? kPrimary : context.cTextSub,
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            height: _inputRowHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: context.cCardTop,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: context.cBorderSub),
             ),
-            decoration: const InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+            child: TextField(
+              controller: _repsCtrl[i],
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: reps > 0 ? kPrimary : context.cTextSub,
+              ),
+              decoration: const InputDecoration(
+                isDense: true,
+                filled: false,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (v) {
+                final parsed = int.tryParse(v);
+                if (parsed != null) {
+                  setState(() {
+                    _sets[i].reps = parsed;
+                    _sets[i].recordedAt = DateTime.now();
+                  });
+                }
+              },
+              onSubmitted: (_) => _triggerSave(),
+              onEditingComplete: _triggerSave,
             ),
-            onChanged: (v) {
-              final parsed = int.tryParse(v);
-              if (parsed != null) {
-                setState(() {
-                  _sets[i].reps = parsed;
-                  _sets[i].recordedAt = DateTime.now();
-                });
-              }
-            },
-            onSubmitted: (_) => _triggerSave(),
-            onEditingComplete: _triggerSave,
           ),
         ),
         _counterBtn(
@@ -1157,11 +1194,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       onTap: onTap,
       child: Container(
         width: 30,
-        height: 30,
+        height: _inputRowHeight,
         decoration: BoxDecoration(
-          color: onTap != null
-              ? context.cCardTop.withValues(alpha: 0.5)
-              : Colors.transparent,
+          color: onTap != null ? context.cCardTop : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: onTap != null ? context.cBorderSub : Colors.transparent,

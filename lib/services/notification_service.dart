@@ -12,9 +12,46 @@ class NotificationService {
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
-  static const _restEndId = 42;
-  static const _restOngoingId = 43;
   static const _stopwatchOngoingId = 44;
+
+  // ── 通知タップ時の画面遷移 ────────────────────────────────────
+  // payload には種目タイマーのキー（種目名）を格納する。
+  // ナビゲーションハンドラ登録前にタップされた場合に備えて保留しておく。
+  void Function(String exerciseKey)? _navigationHandler;
+  String? _pendingNavigationKey;
+
+  void setNavigationHandler(void Function(String exerciseKey) handler) {
+    _navigationHandler = handler;
+    final pending = _pendingNavigationKey;
+    if (pending != null) {
+      _pendingNavigationKey = null;
+      handler(pending);
+    }
+  }
+
+  void _dispatchNavigation(String? key) {
+    if (key == null || key.isEmpty) return;
+    final handler = _navigationHandler;
+    if (handler != null) {
+      handler(key);
+    } else {
+      _pendingNavigationKey = key;
+    }
+  }
+
+  void _onNotificationTap(NotificationResponse response) {
+    _dispatchNavigation(response.payload);
+  }
+
+  /// アプリが通知タップで（終了状態から）起動された場合の payload を拾う。
+  /// main() で initialize() の直後に呼ぶこと。
+  Future<void> checkLaunchDetails() async {
+    if (!_initialized) return;
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp == true) {
+      _dispatchNavigation(details!.notificationResponse?.payload);
+    }
+  }
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -42,6 +79,7 @@ class NotificationService {
     );
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
+      onDidReceiveNotificationResponse: _onNotificationTap,
     );
     _initialized = true;
   }
@@ -63,18 +101,31 @@ class NotificationService {
     return false;
   }
 
-  Future<void> scheduleRestEnd(int remainingSec) async {
+  // ── 種目ごとの通知ID ──────────────────────────────────────────
+  // 同じ key（種目名）でも「終了通知」と「進行中通知」は別IDにする必要があるため
+  // 用途プレフィックスと key を合成してハッシュ化する。
+  int _idFor(String usage, String key) =>
+      (usage.hashCode ^ key.hashCode) & 0x7FFFFFFF;
+
+  int _restEndId(String key) => _idFor('rest_end', key);
+  int _restOngoingId(String key) => _idFor('rest_ongoing', key);
+
+  // ── 休憩終了アラート通知（種目ごと） ────────────────────────────
+
+  Future<void> scheduleRestEnd(
+      String key, String exerciseName, int remainingSec) async {
     final enabled = await UserPreferences.instance.getRestNotification();
     if (!enabled || !_initialized) return;
 
-    await _plugin.cancel(_restEndId);
+    final id = _restEndId(key);
+    await _plugin.cancel(id);
     final scheduledTime =
         tz.TZDateTime.now(tz.local).add(Duration(seconds: remainingSec));
 
     try {
       await _plugin.zonedSchedule(
-        _restEndId,
-        '休憩終了',
+        id,
+        '休憩終了 - $exerciseName',
         '次のセットを始めましょう！',
         scheduledTime,
         NotificationDetails(
@@ -94,29 +145,31 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
+        payload: key,
       );
     } catch (e) {
       debugPrint('[NotificationService] schedule failed: $e');
     }
   }
 
-  Future<void> cancelRestEnd() async {
+  Future<void> cancelRestEnd(String key) async {
     if (!_initialized) return;
-    await _plugin.cancel(_restEndId);
+    await _plugin.cancel(_restEndId(key));
   }
 
   // ── 常駐通知（Android chronometer によるリアルタイム残り時間・経過時間表示）──
   // iOS はローカル通知をバックグラウンドで逐次更新できないため対象外（Live Activities で別途対応）。
 
-  /// 休憩タイマーの残り時間を通知バーにリアルタイム表示（Android のみ）。
-  Future<void> showRestOngoing(DateTime endTime) async {
+  /// 休憩タイマーの残り時間を通知バーにリアルタイム表示（Android のみ・種目ごと）。
+  Future<void> showRestOngoing(
+      String key, String exerciseName, DateTime endTime) async {
     if (!Platform.isAndroid || !_initialized) return;
     final enabled = await UserPreferences.instance.getRestNotification();
     if (!enabled) return;
     try {
       await _plugin.show(
-        _restOngoingId,
-        '休憩タイマー',
+        _restOngoingId(key),
+        '休憩タイマー - $exerciseName',
         '残り時間をカウントダウン中',
         NotificationDetails(
           android: AndroidNotificationDetails(
@@ -135,20 +188,24 @@ class NotificationService {
             when: endTime.millisecondsSinceEpoch,
           ),
         ),
+        payload: key,
       );
     } catch (e) {
       debugPrint('[NotificationService] rest ongoing failed: $e');
     }
   }
 
-  Future<void> cancelRestOngoing() async {
+  Future<void> cancelRestOngoing(String key) async {
     if (!_initialized) return;
-    await _plugin.cancel(_restOngoingId);
+    await _plugin.cancel(_restOngoingId(key));
   }
 
   /// ストップウォッチの経過時間を通知バーにリアルタイム表示（Android のみ）。
+  /// ストップウォッチはワークアウト全体で1つのため種目に依存しない。
   Future<void> showStopwatchOngoing(DateTime startedAt) async {
     if (!Platform.isAndroid || !_initialized) return;
+    final enabled = await UserPreferences.instance.getRestNotification();
+    if (!enabled) return;
     try {
       await _plugin.show(
         _stopwatchOngoingId,

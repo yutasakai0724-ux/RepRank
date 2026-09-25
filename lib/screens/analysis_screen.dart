@@ -432,7 +432,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         lineBarsData: [
           LineChartBarData(
             spots: spots,
-            isCurved: true,
+            isCurved: false,
             curveSmoothness: 0.35,
             color: kPrimary,
             barWidth: 2.5,

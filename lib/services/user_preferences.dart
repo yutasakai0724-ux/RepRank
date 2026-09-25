@@ -191,17 +191,34 @@ class UserPreferences {
   }
 
   // ── お気に入り種目 ─────────────────────────────────────────
+  // 並び替え可能なようにリスト（順序保持）で保存する。
 
   static const _keyFavoriteExercises = 'favorite_exercises';
 
-  Future<Set<String>> getFavoriteExercises() async {
+  Future<List<String>> getFavoriteExercises() async {
     final prefs = await SharedPreferences.getInstance();
-    return (prefs.getStringList(_keyFavoriteExercises) ?? []).toSet();
+    return prefs.getStringList(_keyFavoriteExercises) ?? [];
   }
 
-  Future<void> setFavoriteExercises(Set<String> names) async {
+  Future<void> setFavoriteExercises(List<String> names) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_keyFavoriteExercises, names.toList());
+    await prefs.setStringList(_keyFavoriteExercises, names);
+  }
+
+  // ── 種目の表示順（部位内の並び替え） ───────────────────────
+  // 部位ごとに並び替えた結果をフラットな1つのリストとして保存する。
+  // 表示時は各部位でフィルタしてからこの順序でソートする。
+
+  static const _keyExerciseOrder = 'exercise_display_order';
+
+  Future<List<String>> getExerciseOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_keyExerciseOrder) ?? [];
+  }
+
+  Future<void> setExerciseOrder(List<String> order) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_keyExerciseOrder, order);
   }
 
   // ── 休憩タイマー通知 ──────────────────────────────────────────
@@ -216,6 +233,20 @@ class UserPreferences {
   Future<void> setRestNotification(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyRestNotification, value);
+  }
+
+  // ── 通知の初回案内表示済みフラグ ────────────────────────────
+
+  static const _keyNotificationPromptShown = 'notification_prompt_shown';
+
+  Future<bool> hasShownNotificationPrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyNotificationPromptShown) ?? false;
+  }
+
+  Future<void> setNotificationPromptShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyNotificationPromptShown, true);
   }
 
   // ── 匿名統計データの共有許可 ────────────────────────────────

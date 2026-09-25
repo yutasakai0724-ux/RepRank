@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'theme.dart';
+import 'models/workout.dart';
+import 'services/rest_timer_service.dart';
+import 'services/navigation_service.dart';
 import 'data/database_helper.dart';
 import 'repositories/sqlite_workout_repository.dart';
 import 'repositories/firestore_workout_repository.dart';
@@ -35,6 +40,9 @@ void main() async {
   await AppSettings.instance.load();
   await NotificationService.instance.initialize();
   await LiveActivityService.instance.initialize();
+  // 通知タップでアプリが起動された場合の遷移先を保留しておく
+  // （ハンドラは _AuthGateState.initState で登録される）
+  unawaited(NotificationService.instance.checkLaunchDetails());
 
   // 初期リポジトリ（SQLiteのみ）で起動
   final local = SqliteWorkoutRepository(DatabaseHelper.instance);
@@ -89,6 +97,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'Rep Rank',
       debugShowCheckedModeBanner: false,
       themeMode: AppSettings.instance.themeMode,
@@ -124,10 +133,51 @@ class _AuthGateState extends State<_AuthGate> {
   void initState() {
     super.initState();
     AuthService.instance.authStateChanges.listen(_onAuthChanged);
+    // 休憩タイマー通知タップ → 該当種目の記録画面へ遷移
+    NotificationService.instance.setNavigationHandler(_navigateToExerciseTimer);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _checkPrivacyConsent();
       await _checkTutorial();
+      await _checkNotificationPrompt();
     });
+  }
+
+  /// 通知タップで渡された種目キー（種目名）から記録画面を復元して遷移する。
+  /// アプリ実行中に開始されたタイマーなら RestTimerService に情報が残っているので
+  /// それを優先し、なければ現在のセッション・過去のセッションから種目を探す。
+  Future<void> _navigateToExerciseTimer(String exerciseKey) async {
+    final entry = RestTimerService.instance.entryFor(exerciseKey);
+    Exercise? exercise = entry?.exercise;
+    String? sessionId = entry?.sessionId;
+
+    if (exercise == null) {
+      final active = SessionManager.instance.active;
+      exercise =
+          active?.exercises.where((e) => e.name == exerciseKey).firstOrNull;
+      sessionId = active?.id;
+    }
+    if (exercise == null) {
+      final sessions = await SessionManager.instance.getAllSessions();
+      for (final s in sessions) {
+        final found =
+            s.exercises.where((e) => e.name == exerciseKey).firstOrNull;
+        if (found != null) {
+          exercise = found;
+          sessionId = s.id;
+          break;
+        }
+      }
+    }
+    if (exercise == null || !mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ExerciseRecordScreen(
+          exercise: exercise!,
+          sessionId: sessionId,
+        ),
+      ),
+    );
   }
 
   Future<void> _onAuthChanged(User? user) async {
@@ -159,6 +209,49 @@ class _AuthGateState extends State<_AuthGate> {
         fullscreenDialog: true,
       ),
     );
+  }
+
+  Future<void> _checkNotificationPrompt() async {
+    final shown = await UserPreferences.instance.hasShownNotificationPrompt();
+    if (shown || !mounted) return;
+    await UserPreferences.instance.setNotificationPromptShown();
+
+    final wantsNotification = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cCardLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('通知を許可しますか？',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: context.cText)),
+        content: Text(
+          'トレーニング時間の計測・休憩タイマーの終了をお知らせするために通知を使用します。'
+          'アプリを離れていても経過時間や残り時間を確認できます。',
+          style: GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('後で',
+                style: GoogleFonts.inter(color: context.cTextSub)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('許可する',
+                style: GoogleFonts.inter(
+                    color: kPrimary, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (wantsNotification == true) {
+      final granted = await NotificationService.instance.requestPermission();
+      if (granted) {
+        await UserPreferences.instance.setRestNotification(true);
+      }
+    }
   }
 
   @override
@@ -228,7 +321,7 @@ class _MainNavigationState extends State<MainNavigation> {
             _navItem(1, Icons.calendar_month_outlined, Icons.calendar_month, 'カレンダー'),
             const SizedBox(width: 56),
             _navItem(2, Icons.flag_outlined, Icons.flag, 'ルーチン'),
-            _navItem(3, Icons.person_outline, Icons.person, 'プロフィール'),
+            _navItem(3, Icons.settings_outlined, Icons.settings, '設定'),
           ],
         ),
       ),

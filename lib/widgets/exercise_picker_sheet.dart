@@ -32,7 +32,8 @@ class ExercisePickerSheet extends StatefulWidget {
 
 class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   late List<Map<String, dynamic>> _exercises;
-  Set<String> _favorites = {};
+  List<String> _favorites = [];
+  List<String> _exerciseOrder = [];
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
 
@@ -67,10 +68,12 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   Future<void> _loadData() async {
     final custom = await UserPreferences.instance.getCustomExercises();
     final favs = await UserPreferences.instance.getFavoriteExercises();
+    final order = await UserPreferences.instance.getExerciseOrder();
     if (mounted) {
       setState(() {
         if (custom.isNotEmpty) _exercises.addAll(custom);
         _favorites = favs;
+        _exerciseOrder = order;
       });
     }
   }
@@ -95,7 +98,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   }
 
   Future<void> _toggleFavorite(String name) async {
-    final updated = Set<String>.from(_favorites);
+    final updated = List<String>.from(_favorites);
     if (updated.contains(name)) {
       updated.remove(name);
     } else {
@@ -103,6 +106,36 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
     }
     await UserPreferences.instance.setFavoriteExercises(updated);
     if (mounted) setState(() => _favorites = updated);
+  }
+
+  /// 部位内の並び替え結果をグローバルな表示順リストに反映する。
+  /// このリストは部位をまたいだ全種目のフラットな順序だが、表示時は
+  /// 部位でフィルタしてからこの順序でソートするため、他部位の並びには影響しない。
+  Future<void> _persistGroupOrder(List<String> namesInNewOrder) async {
+    final updated = List<String>.from(_exerciseOrder)
+      ..removeWhere((n) => namesInNewOrder.contains(n));
+    updated.addAll(namesInNewOrder);
+    setState(() => _exerciseOrder = updated);
+    await UserPreferences.instance.setExerciseOrder(updated);
+  }
+
+  Future<void> _persistFavoriteOrder(List<String> namesInNewOrder) async {
+    setState(() => _favorites = namesInNewOrder);
+    await UserPreferences.instance.setFavoriteExercises(namesInNewOrder);
+  }
+
+  /// items を _exerciseOrder の順序でソートする。未登録の種目は元の相対順序のまま末尾に続く。
+  List<Map<String, dynamic>> _sortByOrder(List<Map<String, dynamic>> items) {
+    final orderIndex = <String, int>{
+      for (int i = 0; i < _exerciseOrder.length; i++) _exerciseOrder[i]: i,
+    };
+    final sorted = List<Map<String, dynamic>>.from(items);
+    sorted.sort((a, b) {
+      final ai = orderIndex[a['name']] ?? (_exerciseOrder.length + items.indexOf(a));
+      final bi = orderIndex[b['name']] ?? (_exerciseOrder.length + items.indexOf(b));
+      return ai.compareTo(bi);
+    });
+    return sorted;
   }
 
   void _showAddExerciseDialog() {
@@ -182,10 +215,18 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
     );
   }
 
-  Widget _buildExerciseItem(String name, MuscleGroup group, {bool isPriority = false}) {
+  Widget _buildExerciseItem(
+    String name,
+    MuscleGroup group, {
+    Key? key,
+    bool isPriority = false,
+    bool reorderable = false,
+    int? dragIndex,
+  }) {
     final isMarked = widget.markedNames.contains(name);
     final isFav = _favorites.contains(name);
     return GestureDetector(
+      key: key,
       onTap: (isMarked && !widget.allowMarkedTap)
           ? null
           : () {
@@ -208,6 +249,13 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
         ),
         child: Row(
           children: [
+            if (reorderable && dragIndex != null) ...[
+              ReorderableDragStartListener(
+                index: dragIndex,
+                child: Icon(Icons.drag_handle, size: 18, color: context.cBorder),
+              ),
+              const SizedBox(width: 8),
+            ],
             if (isPriority) ...[
               Icon(Icons.star, size: 14, color: kPrimary.withValues(alpha: 0.7)),
               const SizedBox(width: 8),
@@ -244,32 +292,34 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
     );
   }
 
-  // 検索中はフラットリスト、通常時はアコーディオン
-  List<Widget> _buildGroupedItems() {
+  // 検索結果はフラットリスト（並び替えなし）
+  Widget _buildSearchResults() {
     final q = _searchQuery.toLowerCase();
-    final isSearching = q.isNotEmpty;
-
-    if (isSearching) {
-      final filtered = _exercises
-          .where((e) => (e['name'] as String).toLowerCase().contains(q))
-          .toList();
-      if (filtered.isEmpty) {
-        return [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32),
-            child: Center(
-              child: Text('該当する種目が見つかりません',
-                  style: GoogleFonts.inter(fontSize: 13, color: context.cTextSub)),
-            ),
-          ),
-        ];
-      }
-      return filtered
-          .map((e) => _buildExerciseItem(e['name'] as String, e['group'] as MuscleGroup))
-          .toList();
+    final filtered = _exercises
+        .where((e) => (e['name'] as String).toLowerCase().contains(q))
+        .toList();
+    if (filtered.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: Text('該当する種目が見つかりません',
+              style: GoogleFonts.inter(fontSize: 13, color: context.cTextSub)),
+        ),
+      );
     }
+    return Column(
+      children: filtered
+          .map((e) => _buildExerciseItem(
+                e['name'] as String,
+                e['group'] as MuscleGroup,
+                key: ValueKey('search_${e['name']}'),
+              ))
+          .toList(),
+    );
+  }
 
-    // 通常表示：開閉状態を _expanded で管理
+  // 通常表示：部位別アコーディオン（部位内は並び替え可能）
+  List<Widget> _buildGroupedItems() {
     final grouped = <MuscleGroup, List<Map<String, dynamic>>>{};
     for (final e in _exercises) {
       final g = e['group'] as MuscleGroup;
@@ -278,7 +328,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
     return _groupOrder
         .where((g) => grouped.containsKey(g))
         .map((group) {
-          final items = grouped[group]!;
+          final items = _sortByOrder(grouped[group]!);
           return Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
@@ -298,22 +348,92 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               iconColor: kPrimary,
               collapsedIconColor: context.cTextSub,
               childrenPadding: EdgeInsets.zero,
-              children: items.map((e) {
-                final name = e['name'] as String;
-                return _buildExerciseItem(name, e['group'] as MuscleGroup);
-              }).toList(),
+              children: [
+                ReorderableListView(
+                  // ExpansionTile 自体が PageStorageKey(group) で開閉状態(bool)を
+                  // 保存しているため、内側の ReorderableListView には別キーを
+                  // 与えてスクロール位置(double)の復元先を分離する
+                  // （同一キーだと型不一致でクラッシュする）。
+                  key: PageStorageKey('reorder_${group.name}'),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  onReorderItem: (oldIndex, newIndex) {
+                    final reordered = List<Map<String, dynamic>>.from(items);
+                    final moved = reordered.removeAt(oldIndex);
+                    reordered.insert(newIndex, moved);
+                    _persistGroupOrder(
+                        reordered.map((e) => e['name'] as String).toList());
+                  },
+                  children: [
+                    for (int i = 0; i < items.length; i++)
+                      _buildExerciseItem(
+                        items[i]['name'] as String,
+                        items[i]['group'] as MuscleGroup,
+                        key: ValueKey('group_${items[i]['name']}'),
+                        reorderable: true,
+                        dragIndex: i,
+                      ),
+                  ],
+                ),
+              ],
             ),
           );
         })
         .toList();
   }
 
+  Widget _buildFavoritesSection() {
+    final favList =
+        _favorites.where((n) => _exercises.any((e) => e['name'] == n)).toList();
+    if (favList.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 6),
+          child: Text(
+            'お気に入り',
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFFFB300),
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        ReorderableListView(
+          key: const PageStorageKey('reorder_favorites'),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          onReorderItem: (oldIndex, newIndex) {
+            final reordered = List<String>.from(favList);
+            final moved = reordered.removeAt(oldIndex);
+            reordered.insert(newIndex, moved);
+            _persistFavoriteOrder(reordered);
+          },
+          children: [
+            for (int i = 0; i < favList.length; i++)
+              _buildExerciseItem(
+                favList[i],
+                (_exercises.firstWhere(
+                  (e) => e['name'] == favList[i],
+                  orElse: () => {'group': MuscleGroup.chest},
+                )['group'] as MuscleGroup),
+                key: ValueKey('fav_${favList[i]}'),
+                reorderable: true,
+                dragIndex: i,
+              ),
+          ],
+        ),
+        Divider(height: 20, color: context.cCardHigh),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final favList = _searchQuery.isEmpty
-        ? _favorites.where((n) => _exercises.any((e) => e['name'] == n)).toList()
-        : <String>[];
-
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.75,
@@ -405,57 +525,47 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               Divider(height: 1, color: context.cCardHigh),
             ],
             Expanded(
-              child: ListView(
-                controller: ctrl,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                children: [
-                  if (widget.priorityNames.isNotEmpty && _searchQuery.isEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, bottom: 6),
-                      child: Text(
-                        'ルーチン種目',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: kPrimary,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
+              child: _searchQuery.isNotEmpty
+                  ? SingleChildScrollView(
+                      controller: ctrl,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: _buildSearchResults(),
+                    )
+                  : ListView(
+                      controller: ctrl,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      children: [
+                        if (widget.priorityNames.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 6),
+                            child: Text(
+                              'ルーチン種目',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: kPrimary,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+                          ...widget.priorityNames.map((name) {
+                            final ex = _exercises.firstWhere(
+                              (e) => e['name'] == name,
+                              orElse: () => {'name': name, 'group': MuscleGroup.chest},
+                            );
+                            return _buildExerciseItem(
+                              name,
+                              ex['group'] as MuscleGroup,
+                              key: ValueKey('priority_$name'),
+                              isPriority: true,
+                            );
+                          }),
+                          Divider(height: 20, color: context.cCardHigh),
+                        ],
+                        _buildFavoritesSection(),
+                        ..._buildGroupedItems(),
+                      ],
                     ),
-                    ...widget.priorityNames.map((name) {
-                      final ex = _exercises.firstWhere(
-                        (e) => e['name'] == name,
-                        orElse: () => {'name': name, 'group': MuscleGroup.chest},
-                      );
-                      return _buildExerciseItem(name, ex['group'] as MuscleGroup, isPriority: true);
-                    }),
-                    Divider(height: 20, color: context.cCardHigh),
-                  ],
-                  if (favList.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8, bottom: 6),
-                      child: Text(
-                        'お気に入り',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFFFB300),
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                    ...favList.map((name) {
-                      final ex = _exercises.firstWhere(
-                        (e) => e['name'] == name,
-                        orElse: () => {'name': name, 'group': MuscleGroup.chest},
-                      );
-                      return _buildExerciseItem(name, ex['group'] as MuscleGroup);
-                    }),
-                    Divider(height: 20, color: context.cCardHigh),
-                  ],
-                  ..._buildGroupedItems(),
-                ],
-              ),
             ),
           ],
         ),
