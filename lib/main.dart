@@ -26,8 +26,8 @@ import 'screens/history_screen.dart';
 import 'screens/exercise_record_screen.dart';
 import 'screens/routines_screen.dart';
 import 'screens/profile_screen.dart';
-import 'widgets/exercise_picker_sheet.dart';
 import 'widgets/banner_ad_widget.dart';
+import 'widgets/main_bottom_bar.dart';
 import 'widgets/rest_timer_overlay.dart';
 import 'services/app_settings.dart';
 import 'services/notification_service.dart';
@@ -275,6 +275,24 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    mainTabRequest.addListener(_onTabRequested);
+  }
+
+  @override
+  void dispose() {
+    mainTabRequest.removeListener(_onTabRequested);
+    super.dispose();
+  }
+
+  /// 詳細画面のフッターからのタブ切替要求
+  void _onTabRequested() {
+    final i = mainTabRequest.value;
+    if (i != null && i != _currentIndex) _onTabTapped(i);
+  }
+
   static const _screenNames = ['analysis', 'history', 'routines', 'profile'];
 
   void _onTabTapped(int index) {
@@ -301,91 +319,10 @@ class _MainNavigationState extends State<MainNavigation> {
           const BannerAdWidget(),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openExercisePicker(context),
-        backgroundColor: kPrimary,
-        foregroundColor: kOnPrimary,
-        elevation: 4,
-        child: const Icon(Icons.add, size: 28),
-      ),
+      floatingActionButton: MainBottomBar.addButton(context),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: _buildBottomBar(),
-    );
-  }
-
-  Widget _buildBottomBar() {
-    return BottomAppBar(
-      color: context.cCard,
-      elevation: 0,
-      notchMargin: 6,
-      shape: const CircularNotchedRectangle(),
-      child: SizedBox(
-        height: 60,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _navItem(0, Icons.analytics_outlined, Icons.analytics, '分析'),
-            _navItem(1, Icons.calendar_month_outlined, Icons.calendar_month, 'カレンダー'),
-            const SizedBox(width: 56),
-            _navItem(2, Icons.flag_outlined, Icons.flag, 'ルーチン'),
-            _navItem(3, Icons.settings_outlined, Icons.settings, '設定'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navItem(int idx, IconData icon, IconData activeIcon, String label) {
-    final active = _currentIndex == idx;
-    return InkWell(
-      onTap: () => _onTabTapped(idx),
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(active ? activeIcon : icon,
-                size: 22,
-                color: active ? kPrimary : context.cTextSub),
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight:
-                      active ? FontWeight.w600 : FontWeight.w400,
-                  color: active ? kPrimary : context.cTextSub,
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openExercisePicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => ExercisePickerSheet(
-        onSelected: (exercise) async {
-          final existing =
-              await SessionManager.instance.findTodayExercise(exercise.name);
-          if (!context.mounted) return;
-          if (existing != null) {
-            Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ExerciseRecordScreen(
-                exercise: existing.exercise,
-                sessionId: existing.session.id,
-              ),
-            ));
-          } else {
-            Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ExerciseRecordScreen(exercise: exercise),
-            ));
-          }
-        },
-      ),
+      bottomNavigationBar:
+          MainBottomBar(currentIndex: _currentIndex, onTap: _onTabTapped),
     );
   }
 }

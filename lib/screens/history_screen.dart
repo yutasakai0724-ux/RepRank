@@ -29,22 +29,64 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _loadSessions();
   }
 
-  Future<void> _loadSessions() async {
-    final sessions = await SessionManager.instance.getAllSessions();
+  // 集計キャッシュ（_sessions / _searchFilter が変わったときだけ再計算）
+  final Map<int, List<WorkoutSession>> _byDay = {};
+  Set<int> _filteredDays = {};
+  int _streak = 0;
+  List<String> _recentExercises = [];
+  String? _indexedFilter;
+
+  int _dayKey(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
+
+  Future<void> _loadSessions({bool force = false}) async {
+    final sm = SessionManager.instance;
+    final sessions = force
+        ? await sm.getAllSessions()
+        : await sm.getAllSessionsCached();
     if (mounted) {
       setState(() {
         _sessions = sessions;
         _isLoading = false;
+        _rebuildIndex();
       });
     }
   }
 
+  void _rebuildIndex() {
+    _byDay.clear();
+    for (final s in _sessions) {
+      _byDay.putIfAbsent(_dayKey(s.date), () => []).add(s);
+    }
+    _recentExercises = _sessions
+        .expand((s) => s.exercises.map((e) => e.name))
+        .toSet()
+        .toList();
+
+    final today = DateTime.now();
+    var day = DateTime(today.year, today.month, today.day);
+    var streak = 0;
+    while (_byDay.containsKey(_dayKey(day))) {
+      streak++;
+      day = day.subtract(const Duration(days: 1));
+    }
+    _streak = streak;
+    _rebuildFilteredDays();
+  }
+
+  void _rebuildFilteredDays() {
+    _indexedFilter = _searchFilter;
+    final f = _searchFilter;
+    _filteredDays = {
+      for (final e in _byDay.entries)
+        if (f == null ||
+            e.value.any((s) => s.exercises.any((x) => x.name == f)))
+          e.key,
+    };
+  }
+
   bool _isWorkoutDay(DateTime day) {
-    return _sessions.any((s) {
-      if (!_isSameDay(s.date, day)) return false;
-      if (_searchFilter == null) return true;
-      return s.exercises.any((e) => e.name == _searchFilter);
-    });
+    if (_indexedFilter != _searchFilter) _rebuildFilteredDays();
+    return _filteredDays.contains(_dayKey(day));
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -54,9 +96,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // 現在表示月のセッション
   List<WorkoutSession> get _monthSessions {
-    return _sessions.where((s) =>
-        s.date.year == _focusedMonth.year &&
-        s.date.month == _focusedMonth.month).toList();
+    return _sessions
+        .where(
+          (s) =>
+              s.date.year == _focusedMonth.year &&
+              s.date.month == _focusedMonth.month,
+        )
+        .toList();
   }
 
   @override
@@ -82,7 +128,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           : RefreshIndicator(
               color: kPrimary,
               backgroundColor: context.cCardLow,
-              onRefresh: _loadSessions,
+              onRefresh: () => _loadSessions(force: true),
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
@@ -106,128 +152,134 @@ class _HistoryScreenState extends State<HistoryScreen> {
   // ── 検索バー ─────────────────────────────────────────────────────
   Widget _buildSearchBar() {
     // 最近記録された種目名（重複なし）
-    final recentExercises = _sessions
-        .expand((s) => s.exercises.map((e) => e.name))
-        .toSet()
-        .toList();
+    final recentExercises = _recentExercises;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Autocomplete<String>(
-          optionsBuilder: (TextEditingValue tv) {
-            if (tv.text.isEmpty) return recentExercises;
-            final q = tv.text;
-            return defaultExercises
-                .map((e) => e['name'] as String)
-                .where((name) => name.contains(q))
-                .take(8);
-          },
-          displayStringForOption: (s) => s,
-          onSelected: (String selection) {
-            setState(() => _searchFilter = selection);
-            Future.microtask(() {
-              _autocompleteController?.clear();
-              _autocompleteFocus?.unfocus();
-            });
-          },
-          fieldViewBuilder: (ctx, ctrl, focusNode, onSubmitted) {
-            _autocompleteController = ctrl;
-            _autocompleteFocus = focusNode;
-            return Container(
-              decoration: BoxDecoration(
-                color: context.cCard,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: ctrl,
-                focusNode: focusNode,
-                onSubmitted: (_) => onSubmitted(),
-                style: AppFonts.inter(fontSize: 14, color: context.cText),
-                decoration: InputDecoration(
-                  hintText: '種目を検索...',
-                  hintStyle:
-                      AppFonts.inter(fontSize: 14, color: context.cTextSub),
-                  prefixIcon:
-                      Icon(Icons.search, color: context.cTextSub),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+        TapRegion(
+          onTapOutside: (_) => _autocompleteFocus?.unfocus(),
+          child: Autocomplete<String>(
+            optionsBuilder: (TextEditingValue tv) {
+              if (tv.text.isEmpty) return recentExercises;
+              final q = tv.text;
+              return defaultExercises
+                  .map((e) => e['name'] as String)
+                  .where((name) => name.contains(q))
+                  .take(8);
+            },
+            displayStringForOption: (s) => s,
+            onSelected: (String selection) {
+              setState(() => _searchFilter = selection);
+              Future.microtask(() {
+                _autocompleteController?.clear();
+                _autocompleteFocus?.unfocus();
+              });
+            },
+            fieldViewBuilder: (ctx, ctrl, focusNode, onSubmitted) {
+              _autocompleteController = ctrl;
+              _autocompleteFocus = focusNode;
+              return Container(
+                decoration: BoxDecoration(
+                  color: context.cCard,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            );
-          },
-          optionsViewBuilder: (ctx, onSelected, options) {
-            final isRecent = _autocompleteController?.text.isEmpty ?? true;
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4,
-                color: context.cCardLow,
-                borderRadius: BorderRadius.circular(12),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(ctx).size.width - 32,
-                    maxHeight: 220,
+                child: TextField(
+                  controller: ctrl,
+                  focusNode: focusNode,
+                  // 決定キーでは候補を自動選択しない（候補はタップで選ぶ）
+                  onSubmitted: (_) => focusNode.unfocus(),
+                  style: AppFonts.inter(fontSize: 14, color: context.cText),
+                  decoration: InputDecoration(
+                    hintText: '種目を検索...',
+                    hintStyle: AppFonts.inter(
+                      fontSize: 14,
+                      color: context.cTextSub,
+                    ),
+                    prefixIcon: Icon(Icons.search, color: context.cTextSub),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isRecent)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                          child: Text(
-                            '最近の記録',
-                            style: AppFonts.jetBrainsMono(
-                              fontSize: 9,
-                              color: context.cTextSub,
-                              letterSpacing: 1.2,
+                ),
+              );
+            },
+            optionsViewBuilder: (ctx, onSelected, options) {
+              final isRecent = _autocompleteController?.text.isEmpty ?? true;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  color: context.cCardLow,
+                  borderRadius: BorderRadius.circular(12),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(ctx).size.width - 32,
+                      maxHeight: 220,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isRecent)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                            child: Text(
+                              '最近の記録',
+                              style: AppFonts.jetBrainsMono(
+                                fontSize: 9,
+                                color: context.cTextSub,
+                                letterSpacing: 1.2,
+                              ),
                             ),
                           ),
-                        ),
-                      Flexible(
-                        child: ListView.separated(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          itemCount: options.length,
-                          separatorBuilder: (_, _) =>
-                              const Divider(height: 1, color: Colors.white12),
-                          itemBuilder: (ctx2, i) {
-                            final option = options.elementAt(i);
-                            return InkWell(
-                              onTap: () => onSelected(option),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isRecent
-                                          ? Icons.history
-                                          : Icons.search,
-                                      size: 14,
-                                      color: context.cTextSub,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      option,
-                                      style: AppFonts.inter(
-                                          fontSize: 14, color: context.cText),
-                                    ),
-                                  ],
+                        Flexible(
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1, color: Colors.white12),
+                            itemBuilder: (ctx2, i) {
+                              final option = options.elementAt(i);
+                              return InkWell(
+                                onTap: () => onSelected(option),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isRecent ? Icons.history : Icons.search,
+                                        size: 14,
+                                        color: context.cTextSub,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        option,
+                                        style: AppFonts.inter(
+                                          fontSize: 14,
+                                          color: context.cText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
         if (_searchFilter != null) ...[
           const SizedBox(height: 8),
@@ -272,9 +324,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Text(
                 '$year年$month月',
                 style: AppFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: context.cText),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: context.cText,
+                ),
               ),
               const Spacer(),
               _calNavBtn(Icons.chevron_left, () {
@@ -290,10 +343,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Row(
             children: ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) {
               return Expanded(
-                child: Text(d,
-                    textAlign: TextAlign.center,
-                    style: AppFonts.jetBrainsMono(
-                        fontSize: 11, color: context.cTextSub)),
+                child: Text(
+                  d,
+                  textAlign: TextAlign.center,
+                  style: AppFonts.jetBrainsMono(
+                    fontSize: 11,
+                    color: context.cTextSub,
+                  ),
+                ),
               );
             }).toList(),
           ),
@@ -332,8 +389,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildDayCell(DateTime day) {
-    final isSelected =
-        _selectedDay != null && _isSameDay(_selectedDay!, day);
+    final isSelected = _selectedDay != null && _isSameDay(_selectedDay!, day);
     final isToday = _isToday(day);
     final hasWorkout = _isWorkoutDay(day);
 
@@ -366,8 +422,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               '${day.day}',
               style: AppFonts.jetBrainsMono(
                 fontSize: 12,
-                fontWeight:
-                    (isSelected || isToday) ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: (isSelected || isToday)
+                    ? FontWeight.w700
+                    : FontWeight.w400,
                 color: textColor,
               ),
             ),
@@ -399,12 +456,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
         Text(
           '${day.month}月${day.day}日($weekday)',
           style: AppFonts.inter(
-              fontSize: 16, fontWeight: FontWeight.w700, color: context.cText),
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
         ),
         Text(
           '継続日数: $streak 日',
           style: AppFonts.jetBrainsMono(
-              fontSize: 11, color: kPrimary, letterSpacing: 1),
+            fontSize: 11,
+            color: kPrimary,
+            letterSpacing: 1,
+          ),
         ),
       ],
     );
@@ -412,11 +475,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   List<Widget> _buildSessionCards() {
     final day = _selectedDay ?? DateTime.now();
-    final daySessions = _sessions.where((s) {
-      if (!_isSameDay(s.date, day)) return false;
-      if (_searchFilter == null) return true;
-      return s.exercises.any((e) => e.name == _searchFilter);
-    }).toList();
+    final daySessions = (_byDay[_dayKey(day)] ?? const <WorkoutSession>[])
+        .where((s) {
+          if (_searchFilter == null) return true;
+          return s.exercises.any((e) => e.name == _searchFilter);
+        })
+        .toList();
 
     if (daySessions.isEmpty) {
       return [
@@ -425,8 +489,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: Center(
             child: Text(
               'この日のトレーニング記録はありません',
-              style:
-                  AppFonts.inter(fontSize: 13, color: context.cTextSub),
+              style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
             ),
           ),
         ),
@@ -474,7 +537,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '記録を削除',
-          style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText),
+          style: AppFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
         ),
         content: Text(
           '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
@@ -483,14 +549,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('キャンセル',
-                style: AppFonts.inter(color: context.cTextSub)),
+            child: Text(
+              'キャンセル',
+              style: AppFonts.inter(color: context.cTextSub),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('削除',
-                style: AppFonts.inter(
-                    color: Colors.red.shade400, fontWeight: FontWeight.w700)),
+            child: Text(
+              '削除',
+              style: AppFonts.inter(
+                color: Colors.red.shade400,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -503,96 +575,107 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final startLabel = formatHM(session.startedAt);
     final hasRoutine = session.routineName != null;
     final iconColor = hasRoutine ? kPrimary : kTertiary;
-    final exerciseNames =
-        session.exercises.map((e) => e.name).join(', ');
+    final exerciseNames = session.exercises.map((e) => e.name).join(', ');
 
     return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: context.cCardLow,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-        Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.cCardLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.fitness_center, color: iconColor, size: 26),
               ),
-              child: Icon(Icons.fitness_center, color: iconColor, size: 26),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        session.sessionName ?? '記録',
-                        style: AppFonts.inter(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          session.sessionName ?? '記録',
+                          style: AppFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: context.cText),
-                      ),
-                      Text(
-                        startLabel,
-                        style: AppFonts.jetBrainsMono(
-                            fontSize: 10, color: context.cTextSub),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    exerciseNames,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppFonts.inter(
-                        fontSize: 12, color: context.cTextSub),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Icons.trending_up, size: 13, color: kTertiary),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${volume.toStringAsFixed(0)} kg',
-                        style: AppFonts.jetBrainsMono(
-                            fontSize: 11, color: context.cText),
-                      ),
-                      if (duration != null) ...[
-                        const SizedBox(width: 14),
-                        Icon(Icons.timer_outlined,
-                            size: 13, color: kSecondary),
-                        const SizedBox(width: 4),
+                            color: context.cText,
+                          ),
+                        ),
                         Text(
-                          '${duration.inMinutes} 分',
+                          startLabel,
                           style: AppFonts.jetBrainsMono(
-                              fontSize: 11, color: context.cText),
+                            fontSize: 10,
+                            color: context.cTextSub,
+                          ),
                         ),
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      exerciseNames,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppFonts.inter(
+                        fontSize: 12,
+                        color: context.cTextSub,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.trending_up, size: 13, color: kTertiary),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${volume.toStringAsFixed(0)} kg',
+                          style: AppFonts.jetBrainsMono(
+                            fontSize: 11,
+                            color: context.cText,
+                          ),
+                        ),
+                        if (duration != null) ...[
+                          const SizedBox(width: 14),
+                          Icon(
+                            Icons.timer_outlined,
+                            size: 13,
+                            color: kSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${duration.inMinutes} 分',
+                            style: AppFonts.jetBrainsMono(
+                              fontSize: 11,
+                              color: context.cText,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-            if (session.exercises.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Divider(height: 1, color: context.cCardHigh),
-              const SizedBox(height: 6),
-              for (final e in session.exercises) _exerciseRow(session, e),
             ],
+          ),
+          if (session.exercises.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Divider(height: 1, color: context.cCardHigh),
+            const SizedBox(height: 6),
+            for (final e in session.exercises) _exerciseRow(session, e),
           ],
-        ),
+        ],
+      ),
     );
   }
 
@@ -618,23 +701,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: Text(
                 e.name,
                 style: AppFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: context.cText),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: context.cText,
+                ),
               ),
             ),
             Text(
               '${e.sets.length}セット',
               style: AppFonts.jetBrainsMono(
-                  fontSize: 11, color: context.cTextSub),
+                fontSize: 11,
+                color: context.cTextSub,
+              ),
             ),
             const SizedBox(width: 10),
             Text(
               '${best.toStringAsFixed(1)}kg',
               style: AppFonts.jetBrainsMono(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: kPrimaryLight),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: kPrimaryLight,
+              ),
             ),
             Icon(Icons.chevron_right, color: context.cBorder, size: 18),
           ],
@@ -721,22 +808,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   /// 連続日数を計算（今日から遡って連続してワークアウトがある日数）
-  int _calcStreak() {
-    final workoutDates = _sessions.map((s) {
-      final d = s.date;
-      return DateTime(d.year, d.month, d.day);
-    }).toSet();
-
-    int streak = 0;
-    DateTime day = DateTime.now();
-    day = DateTime(day.year, day.month, day.day);
-
-    while (workoutDates.contains(day)) {
-      streak++;
-      day = day.subtract(const Duration(days: 1));
-    }
-    return streak;
-  }
+  int _calcStreak() => _streak;
 
   Widget _statCard({
     required String label,
@@ -755,26 +827,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: AppFonts.jetBrainsMono(
-                  fontSize: 9,
-                  color: context.cTextSub,
-                  letterSpacing: 0.8)),
+          Text(
+            label,
+            style: AppFonts.jetBrainsMono(
+              fontSize: 9,
+              color: context.cTextSub,
+              letterSpacing: 0.8,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value,
-              style: AppFonts.jetBrainsMono(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: valueColor)),
+          Text(
+            value,
+            style: AppFonts.jetBrainsMono(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: valueColor,
+            ),
+          ),
           if (sub != null) ...[
             const SizedBox(height: 2),
             Row(
               children: [
                 Icon(Icons.trending_up, size: 11, color: subColor),
                 const SizedBox(width: 2),
-                Text(sub,
-                    style: AppFonts.jetBrainsMono(
-                        fontSize: 9, color: subColor)),
+                Text(
+                  sub,
+                  style: AppFonts.jetBrainsMono(fontSize: 9, color: subColor),
+                ),
               ],
             ),
           ],

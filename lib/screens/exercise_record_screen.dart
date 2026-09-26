@@ -40,6 +40,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   String _saveStatus = 'saved';
   Exercise? _prevRecord;
+  String? _prevSessionId;
 
   // ── セッション体重 ────────────────────────────────────
   double? _bodyWeightKg;
@@ -135,13 +136,21 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       widget.exercise.name,
       excludeSessionId: widget.sessionId,
     );
-    if (mounted) setState(() => _prevRecord = record);
+    if (mounted) {
+      setState(() {
+        _prevRecord = record?.exercise;
+        _prevSessionId = record?.sessionId;
+      });
+    }
   }
 
-  /// 前回の記録の全セット（重量・回数・メモ）を現在の入力にペーストする。
-  void _pasteFromPrevious() {
+  /// 前回の記録の全セット（重量・回数）を現在の入力にペーストする。
+  /// [withMemo] が true ならセットごとのメモも含める。false の場合、メモは
+  /// 現在入力済みの同じ番号のセットのものを残す。
+  void _pasteFromPrevious({required bool withMemo}) {
     final prev = _prevRecord;
     if (prev == null || prev.sets.isEmpty) return;
+    final oldMemos = [for (final c in _setMemoCtrl) c.text];
     for (final c in _weightCtrl) {
       c.dispose();
     }
@@ -157,17 +166,19 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     final newMemoCtrl = <TextEditingController>[];
     for (int i = 0; i < prev.sets.length; i++) {
       final ps = prev.sets[i];
+      final oldMemo = i < oldMemos.length ? oldMemos[i] : '';
+      final memo = withMemo ? ps.memo : (oldMemo.isEmpty ? null : oldMemo);
       newSets.add(WorkoutSet(
         setNumber: i + 1,
         weight: ps.weight,
         reps: ps.reps,
-        memo: ps.memo,
+        memo: memo,
         recordedAt: DateTime.now(),
       ));
       newWeightCtrl.add(TextEditingController(text: _formatWeight(ps.weight)));
       newRepsCtrl
           .add(TextEditingController(text: ps.reps > 0 ? '${ps.reps}' : ''));
-      newMemoCtrl.add(TextEditingController(text: ps.memo ?? ''));
+      newMemoCtrl.add(TextEditingController(text: memo ?? ''));
     }
     setState(() {
       _sets = newSets;
@@ -179,7 +190,8 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
   }
 
   Future<void> _confirmPasteFromPrevious() async {
-    final confirmed = await showDialog<bool>(
+    // null=キャンセル, true=メモを含める, false=記録のみ
+    final choice = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
@@ -188,25 +200,33 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Text(
-          '現在入力中の全セットが前回の記録（重量・回数・メモ）で上書きされます。よろしいですか？',
+          '現在入力中の全セットの重量・回数が前回の記録で上書きされます。',
           style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
         ),
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowDirection: VerticalDirection.down,
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
                 style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('ペースト',
+            child: Text('メモを含めペースト',
+                style: AppFonts.inter(
+                    color: kPrimary, fontWeight: FontWeight.w700)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('記録のみペースト',
                 style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
-    if (confirmed == true) _pasteFromPrevious();
+    if (choice != null) _pasteFromPrevious(withMemo: choice);
   }
 
   Future<void> _loadRestDuration() async {
@@ -547,6 +567,106 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     );
   }
 
+  /// 前回の記録欄。欄全体のタップで、その記録の編集画面へ遷移する。
+  /// ペーストボタンは誤タップを避けるため、欄の右下に大きめに配置する。
+  Widget _buildPrevRecordCell() {
+    final prev = _prevRecord;
+    final hasPrev = prev != null && prev.sets.isNotEmpty;
+    return Column(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: hasPrev && _prevSessionId != null
+              ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ExerciseRecordScreen(
+                        exercise: prev,
+                        sessionId: _prevSessionId,
+                      ),
+                    ),
+                  ).then((_) => _loadPrevRecord())
+              : null,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '前回の記録',
+                    style: AppFonts.jetBrainsMono(
+                      fontSize: 9,
+                      color: context.cTextSub,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  if (hasPrev)
+                    Icon(Icons.chevron_right, size: 12, color: context.cTextSub),
+                ],
+              ),
+              const SizedBox(height: 4),
+              if (hasPrev)
+                ...prev.sets.take(3).map(
+                      (s) => Text(
+                        '${s.weight.toStringAsFixed(1)}kg × ${s.reps}',
+                        style: AppFonts.jetBrainsMono(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: kPrimaryLight,
+                        ),
+                      ),
+                    )
+              else
+                Text(
+                  '--',
+                  style: AppFonts.jetBrainsMono(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: context.cTextSub,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (hasPrev) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _confirmPasteFromPrevious,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 40, minWidth: 64),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: kPrimary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: kPrimary.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.content_paste, size: 16, color: kPrimary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'ペースト',
+                      style: AppFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: kPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildStatsCard() {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -559,53 +679,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '前回の記録',
-                      style: AppFonts.jetBrainsMono(
-                        fontSize: 9,
-                        color: context.cTextSub,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    if (_prevRecord != null && _prevRecord!.sets.isNotEmpty)
-                      GestureDetector(
-                        onTap: _confirmPasteFromPrevious,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: Icon(Icons.content_paste,
-                              size: 12, color: kPrimary),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                if (_prevRecord != null && _prevRecord!.sets.isNotEmpty)
-                  ..._prevRecord!.sets.take(3).map(
-                        (s) => Text(
-                          '${s.weight.toStringAsFixed(1)}kg × ${s.reps}',
-                          style: AppFonts.jetBrainsMono(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: kPrimaryLight,
-                          ),
-                        ),
-                      )
-                else
-                  Text(
-                    '--',
-                    style: AppFonts.jetBrainsMono(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: context.cTextSub,
-                    ),
-                  ),
-              ],
-            ),
+            child: _buildPrevRecordCell(),
           ),
           Container(width: 1, height: 36, color: Colors.white12),
           Expanded(

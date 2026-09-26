@@ -154,17 +154,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   // 全セッション + アクティブセッションから種目ごとの最高1RMを返す
   // ── 計算結果のキャッシュ（データ更新時のみ再計算）─────────────────
   List<_ExerciseSummary> _summariesCache = [];
-  _ExerciseSummary? _closestCache;
-  Set<MuscleGroup> _coveredCache = {};
 
   List<_ExerciseSummary> get _summaries => _summariesCache;
-  _ExerciseSummary? get _closestToNextLevel => _closestCache;
-  Set<MuscleGroup> get _coveredGroups => _coveredCache;
 
   void _recompute() {
     _summariesCache = _computeSummaries();
-    _closestCache = _computeClosestToNextLevel();
-    _coveredCache = _computeCoveredGroups();
     _bodyWeightCache = _computeBodyWeightHistory();
   }
 
@@ -198,21 +192,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return best.values.toList()..sort((a, b) => b.maxRM.compareTo(a.maxRM));
   }
 
-  // 最も次のレベルに近い種目
-  _ExerciseSummary? _computeClosestToNextLevel() {
-    final list =
-        _summariesCache.where((s) => s.result.nextThreshold != null).toList();
-    if (list.isEmpty) return null;
-    list.sort((a, b) {
-      final ra =
-          (a.result.nextThreshold! - a.maxRM) / a.result.nextThreshold!;
-      final rb =
-          (b.result.nextThreshold! - b.maxRM) / b.result.nextThreshold!;
-      return ra.compareTo(rb);
-    });
-    return list.first;
-  }
-
   // 体重推移（日付ごと、記録が入力された日の体重値を使用）
   List<({String date, double weight})> _bodyWeightCache = const [];
   List<({String date, double weight})> get _bodyWeightHistory => _bodyWeightCache;
@@ -232,16 +211,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final list = byDate.entries.map((e) => (date: e.key, weight: e.value)).toList()
       ..sort((a, b) => a.date.compareTo(b.date));
     return list;
-  }
-
-  // 部位カバレッジ
-  Set<MuscleGroup> _computeCoveredGroups() {
-    final exercises = <Exercise>[
-      ..._allSessions.expand((s) => s.exercises),
-    ];
-    final active = SessionManager.instance.active;
-    if (active != null) exercises.addAll(active.exercises);
-    return exercises.map((e) => e.muscleGroup).toSet();
   }
 
   void _editBodyWeight() {
@@ -349,14 +318,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 if (summaries.isEmpty)
                   _buildEmptyInline()
                 else ...[
-                  _buildOverallCard(summaries),
-                  const SizedBox(height: 16),
-                  _buildMuscleCoverage(),
-                  const SizedBox(height: 16),
-                  if (_closestToNextLevel != null) ...[
-                    _buildNextMilestoneCard(_closestToNextLevel!),
-                    const SizedBox(height: 16),
-                  ],
                   _buildSectionHeader('種目別ベスト'),
                   const SizedBox(height: 10),
                   _buildExerciseGrid(summaries),
@@ -615,263 +576,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 総合カード ────────────────────────────────────────────────
-  Widget _buildOverallCard(List<_ExerciseSummary> summaries) {
-    // 最高レベルを「総合」として表示
-    final topTier = summaries
-        .map((s) => s.result.tier)
-        .reduce((a, b) => a.index > b.index ? a : b);
-    final avgRM = summaries.map((s) => s.maxRM).reduce((a, b) => a + b) /
-        summaries.length;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: topTier.colorForContext(context).withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('総合レベル',
-                    style: AppFonts.jetBrainsMono(
-                        fontSize: 10,
-                        color: context.cTextSub,
-                        letterSpacing: 1)),
-                const SizedBox(height: 8),
-                Text(
-                  topTier.label,
-                  style: AppFonts.inter(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: topTier.colorForContext(context),
-                    letterSpacing: -1,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _statChip(
-                      '${summaries.length} 種目',
-                      Icons.fitness_center,
-                      kPrimary,
-                    ),
-                    const SizedBox(width: 8),
-                    _statChip(
-                      '平均 ${avgRM.toStringAsFixed(0)}kg',
-                      Icons.show_chart,
-                      kTertiary,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          // レベルアイコン
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: topTier.colorForContext(context).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: topTier.colorForContext(context).withValues(alpha: 0.25)),
-            ),
-            child: Icon(_tierIcon(topTier), color: topTier.colorForContext(context), size: 36),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statChip(String label, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 4),
-          Text(label,
-              style: AppFonts.jetBrainsMono(
-                  fontSize: 10, color: color, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  // ── 部位カバレッジ ──────────────────────────────────────────
-  Widget _buildMuscleCoverage() {
-    const allGroups = [
-      MuscleGroup.chest,
-      MuscleGroup.back,
-      MuscleGroup.legs,
-      MuscleGroup.shoulders,
-      MuscleGroup.arms,
-      MuscleGroup.abs,
-    ];
-    final covered = _coveredGroups;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('部位カバレッジ',
-              style: AppFonts.jetBrainsMono(
-                  fontSize: 10,
-                  color: context.cTextSub,
-                  letterSpacing: 1)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: allGroups.map((g) {
-              final hit = covered.contains(g);
-              return Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: hit
-                          ? kPrimary.withValues(alpha: 0.12)
-                          : context.cCardHigh,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: hit
-                            ? kPrimary.withValues(alpha: 0.4)
-                            : Colors.transparent,
-                      ),
-                    ),
-                    child: Icon(
-                      _groupIcon(g),
-                      size: 18,
-                      color: hit ? kPrimary : context.cTextSub.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    g.label,
-                    style: AppFonts.jetBrainsMono(
-                      fontSize: 9,
-                      color: hit ? context.cText : context.cTextSub.withValues(alpha: 0.4),
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── 次のマイルストーン ────────────────────────────────────────
-  Widget _buildNextMilestoneCard(_ExerciseSummary s) {
-    final next = s.result.nextThreshold!;
-    final diff = next - s.maxRM;
-    final nextTier = StrengthTier.values[s.result.tier.index + 1];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: nextTier.colorForContext(context).withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('最も近い目標',
-              style: AppFonts.jetBrainsMono(
-                  fontSize: 10,
-                  color: context.cTextSub,
-                  letterSpacing: 1)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: nextTier.colorForContext(context).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.flag_outlined,
-                    color: nextTier.colorForContext(context), size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      s.exercise.name,
-                      style: AppFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: context.cText),
-                    ),
-                    Text(
-                      '${s.result.tier.label} → ${nextTier.label}',
-                      style: AppFonts.jetBrainsMono(
-                          fontSize: 11, color: context.cTextSub),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${next.toStringAsFixed(1)}kg',
-                    style: AppFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: nextTier.colorForContext(context),
-                      height: 1,
-                    ),
-                  ),
-                  Text(
-                    'あと +${diff.toStringAsFixed(1)}kg',
-                    style: AppFonts.jetBrainsMono(
-                        fontSize: 10, color: context.cTextSub),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: s.result.progressInTier,
-              minHeight: 6,
-              backgroundColor: context.cCardHigh,
-              valueColor: AlwaysStoppedAnimation(nextTier.colorForContext(context)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── 種目別グリッド ────────────────────────────────────────────
   Widget _buildSectionHeader(String title) {
     return Text(
@@ -1058,16 +762,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ),
       ),
     );
-  }
-
-  IconData _tierIcon(StrengthTier t) {
-    switch (t) {
-      case StrengthTier.beginner:     return Icons.fitness_center;
-      case StrengthTier.novice:       return Icons.trending_up;
-      case StrengthTier.intermediate: return Icons.bolt;
-      case StrengthTier.advanced:     return Icons.local_fire_department;
-      case StrengthTier.elite:        return Icons.emoji_events;
-    }
   }
 
   IconData _groupIcon(MuscleGroup g) {

@@ -57,16 +57,22 @@ class RestTimerService extends ChangeNotifier {
   // ── オーバーレイ抑制 ──────────────────────────────────
   // 該当種目の記録画面自体にタイマーUIが表示されている間は、
   // その種目分だけ全画面共通オーバーレイとの二重表示を避ける。
-  final Set<String> _suppressedKeys = {};
-  bool isSuppressed(String key) => _suppressedKeys.contains(key);
+  // 同じ種目の記録画面が重なって開かれることがあるため、回数で管理する
+  final Map<String, int> _suppressedKeys = {};
+  bool isSuppressed(String key) => (_suppressedKeys[key] ?? 0) > 0;
 
   void suppressOverlay(String key) {
-    _suppressedKeys.add(key);
+    _suppressedKeys[key] = (_suppressedKeys[key] ?? 0) + 1;
     notifyListeners();
   }
 
   void unsuppressOverlay(String key) {
-    _suppressedKeys.remove(key);
+    final n = (_suppressedKeys[key] ?? 0) - 1;
+    if (n > 0) {
+      _suppressedKeys[key] = n;
+    } else {
+      _suppressedKeys.remove(key);
+    }
     notifyListeners();
   }
 

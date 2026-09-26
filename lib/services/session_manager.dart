@@ -167,6 +167,7 @@ class SessionManager extends ChangeNotifier {
   /// セッション破棄（テスト・リセット用）
   void reset() {
     _active = null;
+    _cache = null;
     routineExerciseNames = [];
   }
 
@@ -174,10 +175,32 @@ class SessionManager extends ChangeNotifier {
 
   Future<List<WorkoutSession>> getAllSessions() => _repo.getAllSessions();
 
+  List<WorkoutSession>? _cache;
+
+  /// 表示専用のキャッシュ付き全件取得（カレンダー用）。
+  /// データ変更の通知（notifyListeners）・削除で破棄される。返したリストは変更しないこと。
+  Future<List<WorkoutSession>> getAllSessionsCached() async {
+    final c = _cache;
+    if (c != null) return c;
+    final fresh = await _repo.getAllSessions();
+    _cache = fresh;
+    return fresh;
+  }
+
+  @override
+  void notifyListeners() {
+    _cache = null;
+    super.notifyListeners();
+  }
+
   Future<List<WorkoutSession>> getSessionsForDate(DateTime date) =>
       _repo.getSessionsForDate(date);
 
-  Future<void> deleteSession(String id) => _repo.deleteSession(id);
+  Future<void> deleteSession(String id) async {
+    _cache = null;
+    await _repo.deleteSession(id);
+    _cache = null;
+  }
 
   /// 指定種目の過去最高ベストセット（1RM が最大のセット）
   Future<WorkoutSet?> getPreviousBest(String exerciseName) async {
@@ -194,7 +217,7 @@ class SessionManager extends ChangeNotifier {
 
   /// 指定種目を直近に記録したセッションでのその種目の記録（全セット）を返す。
   /// 「前回の記録」表示・ペースト機能用。現在編集中のセッションは除外。
-  Future<Exercise?> getPreviousExerciseRecord(
+  Future<({Exercise exercise, String sessionId})?> getPreviousExerciseRecord(
       String exerciseName, {String? excludeSessionId}) async {
     final sessions = await _repo.getAllSessions();
     final candidates = sessions.where((s) =>
@@ -204,6 +227,10 @@ class SessionManager extends ChangeNotifier {
     if (candidates.isEmpty) return null;
     final latestSession =
         candidates.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
-    return latestSession.exercises.firstWhere((e) => e.name == exerciseName);
+    return (
+      exercise:
+          latestSession.exercises.firstWhere((e) => e.name == exerciseName),
+      sessionId: latestSession.id,
+    );
   }
 }
