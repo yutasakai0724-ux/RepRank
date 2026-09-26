@@ -4,6 +4,7 @@ import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
 import '../utils/time_format.dart';
+import 'daily_detail_screen.dart';
 import 'exercise_record_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -496,41 +497,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ];
     }
 
-    return [
-      for (final s in daySessions) ...[
-        Dismissible(
-          key: ValueKey(s.id),
-          direction: DismissDirection.endToStart,
-          confirmDismiss: (_) => _confirmDelete(s),
-          onDismissed: (_) async {
-            await SessionManager.instance.deleteSession(s.id);
-            _loadSessions();
-          },
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            decoration: BoxDecoration(
-              color: Colors.red.shade900,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.delete_outline, color: Colors.white, size: 24),
-                SizedBox(height: 4),
-                Text('削除', style: TextStyle(color: Colors.white, fontSize: 11)),
-              ],
-            ),
-          ),
-          child: _sessionCard(s),
-        ),
-        const SizedBox(height: 10),
-      ],
-    ];
+    return [_dayCard(day, daySessions)];
   }
 
-  Future<bool?> _confirmDelete(WorkoutSession session) {
-    return showDialog<bool>(
+  /// カード長押し: その日の記録をまとめて削除する（確認ダイアログあり）。
+  Future<void> _confirmDeleteDay(
+    DateTime day,
+    List<WorkoutSession> sessions,
+  ) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
@@ -543,7 +518,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ),
         content: Text(
-          '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
+          '${day.month}月${day.day}日の記録（${sessions.length}件）を削除しますか？\nこの操作は元に戻せません。',
           style: AppFonts.inter(fontSize: 14, color: context.cTextSub),
         ),
         actions: [
@@ -567,114 +542,148 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
     );
+    if (ok != true) return;
+    for (final s in sessions) {
+      await SessionManager.instance.deleteSession(s.id);
+    }
+    _loadSessions();
   }
 
-  Widget _sessionCard(WorkoutSession session) {
-    final volume = session.totalVolume;
-    final duration = session.finishedAt?.difference(session.startedAt);
-    final startLabel = formatHM(session.startedAt);
-    final hasRoutine = session.routineName != null;
+  /// その日の記録を1枚のカードに統合して表示する。
+  /// カード全体のタップで日別記録一覧画面へ、種目行のタップでその種目の記録画面へ遷移する。
+  Widget _dayCard(DateTime day, List<WorkoutSession> sessions) {
+    final volume = sessions.fold(0.0, (s, e) => s + e.totalVolume);
+    final finished = sessions.where((s) => s.finishedAt != null);
+    final duration = finished.isEmpty
+        ? null
+        : finished.fold(
+            Duration.zero,
+            (d, s) => d + s.finishedAt!.difference(s.startedAt),
+          );
+    final earliest = sessions
+        .map((s) => s.startedAt)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+    final startLabel = formatHM(earliest);
+    final hasRoutine = sessions.any((s) => s.routineName != null);
     final iconColor = hasRoutine ? kPrimary : kTertiary;
-    final exerciseNames = session.exercises.map((e) => e.name).join(', ');
+    final names = sessions
+        .map((s) => s.sessionName)
+        .whereType<String>()
+        .toSet()
+        .join('・');
+    final title = names.isEmpty ? '記録' : names;
+    final rows = [
+      for (final s in sessions)
+        for (final e in s.exercises) (session: s, exercise: e),
+    ];
+    final exerciseNames = rows.map((r) => r.exercise.name).join(', ');
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => _confirmDeleteDay(day, sessions),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => DailyDetailScreen(date: day)),
+      ).then((_) => _loadSessions()),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.cCardLow,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.fitness_center, color: iconColor, size: 26),
                 ),
-                child: Icon(Icons.fitness_center, color: iconColor, size: 26),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          session.sessionName ?? '記録',
-                          style: AppFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: context.cText,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            title,
+                            style: AppFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: context.cText,
+                            ),
                           ),
-                        ),
-                        Text(
-                          startLabel,
-                          style: AppFonts.jetBrainsMono(
-                            fontSize: 10,
-                            color: context.cTextSub,
+                          Text(
+                            startLabel,
+                            style: AppFonts.jetBrainsMono(
+                              fontSize: 10,
+                              color: context.cTextSub,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      exerciseNames,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppFonts.inter(
-                        fontSize: 12,
-                        color: context.cTextSub,
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.trending_up, size: 13, color: kTertiary),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${volume.toStringAsFixed(0)} kg',
-                          style: AppFonts.jetBrainsMono(
-                            fontSize: 11,
-                            color: context.cText,
-                          ),
+                      const SizedBox(height: 3),
+                      Text(
+                        exerciseNames,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.inter(
+                          fontSize: 12,
+                          color: context.cTextSub,
                         ),
-                        if (duration != null) ...[
-                          const SizedBox(width: 14),
-                          Icon(
-                            Icons.timer_outlined,
-                            size: 13,
-                            color: kSecondary,
-                          ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.trending_up, size: 13, color: kTertiary),
                           const SizedBox(width: 4),
                           Text(
-                            '${duration.inMinutes} 分',
+                            '${volume.toStringAsFixed(0)} kg',
                             style: AppFonts.jetBrainsMono(
                               fontSize: 11,
                               color: context.cText,
                             ),
                           ),
+                          if (duration != null) ...[
+                            const SizedBox(width: 14),
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 13,
+                              color: kSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${duration.inMinutes} 分',
+                              style: AppFonts.jetBrainsMono(
+                                fontSize: 11,
+                                color: context.cText,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
+            ),
+            if (rows.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Divider(height: 1, color: context.cCardHigh),
+              const SizedBox(height: 6),
+              for (final r in rows) _exerciseRow(r.session, r.exercise),
             ],
-          ),
-          if (session.exercises.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Divider(height: 1, color: context.cCardHigh),
-            const SizedBox(height: 6),
-            for (final e in session.exercises) _exerciseRow(session, e),
           ],
-        ],
+        ),
       ),
     );
   }

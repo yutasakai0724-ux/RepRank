@@ -34,7 +34,10 @@ class SessionManager extends ChangeNotifier {
 
   /// セッションが存在しなければ新規作成、あれば既存を返す。
   /// アクティブセッションが別日の場合は破棄して新規作成。
-  Future<WorkoutSession> getOrCreate({String? sessionName, String? routineName}) async {
+  Future<WorkoutSession> getOrCreate({
+    String? sessionName,
+    String? routineName,
+  }) async {
     if (_active != null) {
       final today = DateTime.now();
       final d = _active!.date;
@@ -72,7 +75,9 @@ class SessionManager extends ChangeNotifier {
 
   /// 既存セッションの種目を更新して DB に保存（編集モード用）
   Future<void> saveExerciseToExistingSession(
-      String sessionId, Exercise exercise) async {
+    String sessionId,
+    Exercise exercise,
+  ) async {
     // アクティブセッションの場合はそのまま saveExercise を流用
     if (_active?.id == sessionId) {
       await saveExercise(exercise);
@@ -94,7 +99,8 @@ class SessionManager extends ChangeNotifier {
 
   /// 今日の記録に指定種目があれば返す（同日同種目チェック用）
   Future<({WorkoutSession session, Exercise exercise})?> findTodayExercise(
-      String exerciseName) async {
+    String exerciseName,
+  ) async {
     final today = DateTime.now();
     // アクティブセッション（今日）をチェック
     if (_active != null) {
@@ -102,8 +108,9 @@ class SessionManager extends ChangeNotifier {
       if (d.year == today.year &&
           d.month == today.month &&
           d.day == today.day) {
-        final ex =
-            _active!.exercises.where((e) => e.name == exerciseName).firstOrNull;
+        final ex = _active!.exercises
+            .where((e) => e.name == exerciseName)
+            .firstOrNull;
         if (ex != null) return (session: _active!, exercise: ex);
       }
     }
@@ -118,11 +125,9 @@ class SessionManager extends ChangeNotifier {
 
   /// 指定日付でセッションを新規作成して保存（カレンダーから過去日付に記録する際に使用）
   Future<WorkoutSession> createSessionForDate(DateTime date) async {
-    final session = WorkoutSession(
-      date: date,
-      startedAt: date,
-    );
+    final session = WorkoutSession(date: date, startedAt: date);
     await _save(session);
+    _cache = null;
     return session;
   }
 
@@ -218,18 +223,24 @@ class SessionManager extends ChangeNotifier {
   /// 指定種目を直近に記録したセッションでのその種目の記録（全セット）を返す。
   /// 「前回の記録」表示・ペースト機能用。現在編集中のセッションは除外。
   Future<({Exercise exercise, String sessionId})?> getPreviousExerciseRecord(
-      String exerciseName, {String? excludeSessionId}) async {
+    String exerciseName, {
+    String? excludeSessionId,
+  }) async {
     final sessions = await _repo.getAllSessions();
-    final candidates = sessions.where((s) =>
-        s.id != _active?.id &&
-        s.id != excludeSessionId &&
-        s.exercises.any((e) => e.name == exerciseName));
+    final candidates = sessions.where(
+      (s) =>
+          s.id != _active?.id &&
+          s.id != excludeSessionId &&
+          s.exercises.any((e) => e.name == exerciseName),
+    );
     if (candidates.isEmpty) return null;
-    final latestSession =
-        candidates.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
+    final latestSession = candidates.reduce(
+      (a, b) => a.date.isAfter(b.date) ? a : b,
+    );
     return (
-      exercise:
-          latestSession.exercises.firstWhere((e) => e.name == exerciseName),
+      exercise: latestSession.exercises.firstWhere(
+        (e) => e.name == exerciseName,
+      ),
       sessionId: latestSession.id,
     );
   }

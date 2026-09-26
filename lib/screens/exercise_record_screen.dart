@@ -10,11 +10,11 @@ import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
 import '../widgets/duration_picker_sheet.dart';
-import '../widgets/exercise_picker_sheet.dart';
 import 'exercise_analysis_screen.dart';
 
 class ExerciseRecordScreen extends StatefulWidget {
   final Exercise exercise;
+
   /// 保存先セッションID。null の場合はアクティブセッション（今日）に保存。
   final String? sessionId;
 
@@ -97,7 +97,34 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     } else {
       _resolvedSessionId = widget.sessionId;
       _loadBodyWeight();
+      _loadSessionDate();
     }
+  }
+
+  /// 編集中の記録の日付（sessionId 未指定＝今日の新規記録）。
+  DateTime _sessionDate = DateTime.now();
+
+  bool get _isPast {
+    final n = DateTime.now();
+    return _sessionDate.year != n.year ||
+        _sessionDate.month != n.month ||
+        _sessionDate.day != n.day;
+  }
+
+  Future<void> _loadSessionDate() async {
+    // キャッシュに無い（直前に作成された等）場合は DB から取り直す
+    var sessions = await SessionManager.instance.getAllSessionsCached();
+    var s = sessions.where((s) => s.id == widget.sessionId).firstOrNull;
+    if (s == null) {
+      sessions = await SessionManager.instance.getAllSessions();
+      s = sessions.where((s) => s.id == widget.sessionId).firstOrNull;
+    }
+    if (s != null && mounted) setState(() => _sessionDate = s!.date);
+  }
+
+  String _dateLabel(DateTime d) {
+    const w = ['月', '火', '水', '木', '金', '土', '日'];
+    return '${d.year}/${d.month}/${d.day}(${w[d.weekday - 1]})';
   }
 
   void _onTimerChanged() {
@@ -118,8 +145,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       weight = active.bodyWeightKg;
     } else if (_resolvedSessionId != null) {
       final sessions = await SessionManager.instance.getAllSessions();
-      final session =
-          sessions.where((s) => s.id == _resolvedSessionId).firstOrNull;
+      final session = sessions
+          .where((s) => s.id == _resolvedSessionId)
+          .firstOrNull;
       weight = session?.bodyWeightKg;
     }
     weight ??= await UserPreferences.instance.getBodyWeight();
@@ -168,16 +196,19 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       final ps = prev.sets[i];
       final oldMemo = i < oldMemos.length ? oldMemos[i] : '';
       final memo = withMemo ? ps.memo : (oldMemo.isEmpty ? null : oldMemo);
-      newSets.add(WorkoutSet(
-        setNumber: i + 1,
-        weight: ps.weight,
-        reps: ps.reps,
-        memo: memo,
-        recordedAt: DateTime.now(),
-      ));
+      newSets.add(
+        WorkoutSet(
+          setNumber: i + 1,
+          weight: ps.weight,
+          reps: ps.reps,
+          memo: memo,
+          recordedAt: DateTime.now(),
+        ),
+      );
       newWeightCtrl.add(TextEditingController(text: _formatWeight(ps.weight)));
-      newRepsCtrl
-          .add(TextEditingController(text: ps.reps > 0 ? '${ps.reps}' : ''));
+      newRepsCtrl.add(
+        TextEditingController(text: ps.reps > 0 ? '${ps.reps}' : ''),
+      );
       newMemoCtrl.add(TextEditingController(text: memo ?? ''));
     }
     setState(() {
@@ -196,9 +227,13 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('前回の記録をペースト',
-            style: AppFonts.inter(
-                fontWeight: FontWeight.w700, color: context.cText)),
+        title: Text(
+          '前回の記録をペースト',
+          style: AppFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
+        ),
         content: Text(
           '現在入力中の全セットの重量・回数が前回の記録で上書きされます。',
           style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
@@ -208,20 +243,30 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('キャンセル',
-                style: AppFonts.inter(color: context.cTextSub)),
+            child: Text(
+              'キャンセル',
+              style: AppFonts.inter(color: context.cTextSub),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('メモを含めペースト',
-                style: AppFonts.inter(
-                    color: kPrimary, fontWeight: FontWeight.w700)),
+            child: Text(
+              'メモを含めペースト',
+              style: AppFonts.inter(
+                color: kPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('記録のみペースト',
-                style: AppFonts.inter(
-                    color: kPrimary, fontWeight: FontWeight.w700)),
+            child: Text(
+              '記録のみペースト',
+              style: AppFonts.inter(
+                color: kPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -231,7 +276,11 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   Future<void> _loadRestDuration() async {
     final saved = await UserPreferences.instance.getRestDuration();
-    RestTimerService.instance.setDuration(widget.exercise, widget.sessionId, saved);
+    RestTimerService.instance.setDuration(
+      widget.exercise,
+      widget.sessionId,
+      saved,
+    );
   }
 
   @override
@@ -240,6 +289,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     RestTimerService.instance.unsuppressOverlay(_timerKey);
     _saveDebounce?.cancel();
     _uiRefreshTimer?.cancel();
+    _commitSave(); // コントローラ破棄前に保存内容を確定する
     for (final c in _weightCtrl) {
       c.dispose();
     }
@@ -250,7 +300,6 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       c.dispose();
     }
     _exerciseMemoCtrl.dispose();
-    _commitSave();
     super.dispose();
   }
 
@@ -279,8 +328,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   Future<void> _commitSaveAsync() async {
     // 意味のあるデータがある場合のみ保存（選択しただけでは記録にならない）
-    final hasData = _sets.any((s) =>
-            s.reps > 0 || s.weight > 0 || (s.memo?.isNotEmpty ?? false)) ||
+    final hasData =
+        _sets.any(
+          (s) => s.reps > 0 || s.weight > 0 || (s.memo?.isNotEmpty ?? false),
+        ) ||
         _exerciseMemoCtrl.text.trim().isNotEmpty;
     if (!hasData) return;
 
@@ -293,23 +344,29 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           : _exerciseMemoCtrl.text.trim(),
     );
     if (widget.sessionId != null) {
-      await SessionManager.instance
-          .saveExerciseToExistingSession(widget.sessionId!, exercise);
+      await SessionManager.instance.saveExerciseToExistingSession(
+        widget.sessionId!,
+        exercise,
+      );
     } else {
       await SessionManager.instance.saveExercise(exercise);
     }
-    unawaited(AnalyticsService.instance.logExerciseRecorded(
-      exerciseName: widget.exercise.name,
-      setCount: _sets.length,
-    ));
+    unawaited(
+      AnalyticsService.instance.logExerciseRecorded(
+        exerciseName: widget.exercise.name,
+        setCount: _sets.length,
+      ),
+    );
 
     if (_currentMaxRM > 0) {
       final weight = await UserPreferences.instance.getBodyWeight();
       if (weight > 0) {
-        unawaited(CloudDataService.instance.recordRatio(
-          exerciseName: widget.exercise.name,
-          ratio: _currentMaxRM / weight,
-        ));
+        unawaited(
+          CloudDataService.instance.recordRatio(
+            exerciseName: widget.exercise.name,
+            ratio: _currentMaxRM / weight,
+          ),
+        );
       }
     }
   }
@@ -361,9 +418,13 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('この記録の体重',
-            style: AppFonts.inter(
-                fontWeight: FontWeight.w700, color: context.cText)),
+        title: Text(
+          'この記録の体重',
+          style: AppFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
+        ),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -373,32 +434,42 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             suffixText: 'kg',
             suffixStyle: AppFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: context.cBorderSub)),
+              borderSide: BorderSide(color: context.cBorderSub),
+            ),
             focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: kPrimary)),
+              borderSide: BorderSide(color: kPrimary),
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('キャンセル',
-                style: AppFonts.inter(color: context.cTextSub)),
+            child: Text(
+              'キャンセル',
+              style: AppFonts.inter(color: context.cTextSub),
+            ),
           ),
           TextButton(
             onPressed: () {
               final v = double.tryParse(ctrl.text);
               Navigator.pop(ctx, v);
             },
-            child: Text('保存',
-                style: AppFonts.inter(
-                    color: kPrimary, fontWeight: FontWeight.w700)),
+            child: Text(
+              '保存',
+              style: AppFonts.inter(
+                color: kPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
     );
     if (result != null && result > 0 && mounted) {
-      await SessionManager.instance
-          .updateSessionBodyWeight(_resolvedSessionId!, result);
+      await SessionManager.instance.updateSessionBodyWeight(
+        _resolvedSessionId!,
+        result,
+      );
       if (mounted) setState(() => _bodyWeightKg = result);
     }
   }
@@ -420,6 +491,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           appBar: _buildAppBar(),
           body: Column(
             children: [
+              if (_isPast) _buildPastBanner(),
               _buildStatsCard(),
               _buildOverallMemo(),
               _buildRestTimer(),
@@ -431,10 +503,33 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                   itemBuilder: (_, i) => _buildSetRow(i),
                 ),
               ),
-              _buildBottomBar(),
+              _buildAddSetOnlyBar(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 今日以外の記録を編集中であることを目立たせる帯。
+  Widget _buildPastBanner() {
+    return Container(
+      width: double.infinity,
+      color: kPrimary.withValues(alpha: 0.15),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.history, size: 14, color: kPrimary),
+          const SizedBox(width: 6),
+          Text(
+            '${_dateLabel(_sessionDate)}の記録を編集中',
+            style: AppFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -459,12 +554,31 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               letterSpacing: -0.5,
             ),
           ),
-          Text(
-            widget.exercise.muscleGroup.label,
-            style: AppFonts.jetBrainsMono(
-              fontSize: 10,
-              color: context.cTextSub,
-            ),
+          Row(
+            children: [
+              Text(
+                widget.exercise.muscleGroup.label,
+                style: AppFonts.jetBrainsMono(
+                  fontSize: 10,
+                  color: context.cTextSub,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.event,
+                size: 11,
+                color: _isPast ? kPrimary : context.cTextSub,
+              ),
+              const SizedBox(width: 2),
+              Text(
+                _isPast ? _dateLabel(_sessionDate) : '今日',
+                style: AppFonts.jetBrainsMono(
+                  fontSize: 10,
+                  fontWeight: _isPast ? FontWeight.w700 : FontWeight.w400,
+                  color: _isPast ? kPrimary : context.cTextSub,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -497,7 +611,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             ),
             Text(
               '体重 ✎',
-              style: AppFonts.jetBrainsMono(fontSize: 8, color: context.cTextSub),
+              style: AppFonts.jetBrainsMono(
+                fontSize: 8,
+                color: context.cTextSub,
+              ),
             ),
           ],
         ),
@@ -517,10 +634,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, size: 14, color: color),
-          Text(
-            label,
-            style: AppFonts.jetBrainsMono(fontSize: 8, color: color),
-          ),
+          Text(label, style: AppFonts.jetBrainsMono(fontSize: 8, color: color)),
         ],
       ),
     );
@@ -533,10 +647,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         border: Border.all(color: context.cBorder),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Row(children: [
-        _unitBtn('kg', _isKg),
-        _unitBtn('lbs', !_isKg),
-      ]),
+      child: Row(children: [_unitBtn('kg', _isKg), _unitBtn('lbs', !_isKg)]),
     );
   }
 
@@ -578,14 +689,14 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           behavior: HitTestBehavior.opaque,
           onTap: hasPrev && _prevSessionId != null
               ? () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ExerciseRecordScreen(
-                        exercise: prev,
-                        sessionId: _prevSessionId,
-                      ),
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ExerciseRecordScreen(
+                      exercise: prev,
+                      sessionId: _prevSessionId,
                     ),
-                  ).then((_) => _loadPrevRecord())
+                  ),
+                ).then((_) => _loadPrevRecord())
               : null,
           child: Column(
             children: [
@@ -601,12 +712,18 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                     ),
                   ),
                   if (hasPrev)
-                    Icon(Icons.chevron_right, size: 12, color: context.cTextSub),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 12,
+                      color: context.cTextSub,
+                    ),
                 ],
               ),
               const SizedBox(height: 4),
               if (hasPrev)
-                ...prev.sets.take(3).map(
+                ...prev.sets
+                    .take(3)
+                    .map(
                       (s) => Text(
                         '${s.weight.toStringAsFixed(1)}kg × ${s.reps}',
                         style: AppFonts.jetBrainsMono(
@@ -678,9 +795,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: _buildPrevRecordCell(),
-          ),
+          Expanded(child: _buildPrevRecordCell()),
           Container(width: 1, height: 36, color: Colors.white12),
           Expanded(
             child: Column(
@@ -709,14 +824,14 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           GestureDetector(
             onTap: _currentMaxRM > 0
                 ? () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ExerciseAnalysisScreen(
-                          exercise: widget.exercise,
-                          currentOneRM: _currentMaxRM,
-                        ),
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ExerciseAnalysisScreen(
+                        exercise: widget.exercise,
+                        currentOneRM: _currentMaxRM,
                       ),
-                    )
+                    ),
+                  )
                 : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -770,8 +885,11 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           isDense: true,
           filled: false,
           border: InputBorder.none,
-          icon: Icon(Icons.sticky_note_2_outlined,
-              size: 16, color: context.cTextSub),
+          icon: Icon(
+            Icons.sticky_note_2_outlined,
+            size: 16,
+            color: context.cTextSub,
+          ),
           hintText: 'この種目のメモ（フォーム・意識点など）',
           hintStyle: AppFonts.inter(fontSize: 12, color: context.cTextSub),
         ),
@@ -786,15 +904,15 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     final entry = RestTimerService.instance.entryFor(_timerKey);
     final state = entry?.state ?? RestState.idle;
     final isRunning = state == RestState.running;
-    final isPaused  = state == RestState.paused;
+    final isPaused = state == RestState.paused;
     final isFinished = state == RestState.finished;
-    final isIdle    = state == RestState.idle;
+    final isIdle = state == RestState.idle;
 
     final borderColor = isFinished
         ? kTertiary
         : (isRunning || isPaused)
-            ? kSecondary.withValues(alpha: 0.6)
-            : Colors.white.withValues(alpha: 0.06);
+        ? kSecondary.withValues(alpha: 0.6)
+        : Colors.white.withValues(alpha: 0.06);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -812,13 +930,13 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             isFinished
                 ? Icons.check_circle
                 : (isRunning || isPaused)
-                    ? Icons.timer
-                    : Icons.timer_outlined,
+                ? Icons.timer
+                : Icons.timer_outlined,
             color: isFinished
                 ? kTertiary
                 : (isRunning || isPaused)
-                    ? kSecondary
-                    : context.cTextSub,
+                ? kSecondary
+                : context.cTextSub,
             size: 18,
           ),
           const SizedBox(width: 8),
@@ -870,7 +988,8 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       ),
       const Spacer(),
       GestureDetector(
-        onTap: () => RestTimerService.instance.start(widget.exercise, widget.sessionId),
+        onTap: () =>
+            RestTimerService.instance.start(widget.exercise, widget.sessionId),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
@@ -904,7 +1023,8 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         valueListenable: RestTimerService.instance.tick,
         builder: (_, __, ___) => Text(
           formatMMSS(
-              RestTimerService.instance.entryFor(_timerKey)?.remainingSec ?? 0),
+            RestTimerService.instance.entryFor(_timerKey)?.remainingSec ?? 0,
+          ),
           style: AppFonts.jetBrainsMono(
             fontSize: 22,
             fontWeight: FontWeight.w800,
@@ -997,33 +1117,53 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         children: [
           SizedBox(
             width: 28,
-            child: Text('SET',
-                style: AppFonts.jetBrainsMono(
-                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
+            child: Text(
+              'SET',
+              style: AppFonts.jetBrainsMono(
+                fontSize: 9,
+                color: context.cTextSub,
+                letterSpacing: 1,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
             flex: 3,
-            child: Text('重量',
-                textAlign: TextAlign.center,
-                style: AppFonts.jetBrainsMono(
-                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
+            child: Text(
+              '重量',
+              textAlign: TextAlign.center,
+              style: AppFonts.jetBrainsMono(
+                fontSize: 9,
+                color: context.cTextSub,
+                letterSpacing: 1,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
             flex: 4,
-            child: Text('回数',
-                textAlign: TextAlign.center,
-                style: AppFonts.jetBrainsMono(
-                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
+            child: Text(
+              '回数',
+              textAlign: TextAlign.center,
+              style: AppFonts.jetBrainsMono(
+                fontSize: 9,
+                color: context.cTextSub,
+                letterSpacing: 1,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
             flex: 3,
-            child: Text('1RM推定',
-                textAlign: TextAlign.right,
-                style: AppFonts.jetBrainsMono(
-                    fontSize: 9, color: context.cTextSub, letterSpacing: 1)),
+            child: Text(
+              '1RM推定',
+              textAlign: TextAlign.right,
+              style: AppFonts.jetBrainsMono(
+                fontSize: 9,
+                color: context.cTextSub,
+                letterSpacing: 1,
+              ),
+            ),
           ),
           const SizedBox(width: 28),
         ],
@@ -1062,14 +1202,14 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
               // 重量入力（小さめ）
               Expanded(
                 flex: 3,
-                child: SizedBox(height: _inputRowHeight, child: _weightInput(i)),
+                child: SizedBox(
+                  height: _inputRowHeight,
+                  child: _weightInput(i),
+                ),
               ),
               const SizedBox(width: 8),
               // 回数 ± カウンター（キーボード入力も可、1RM推定近くまで幅を使う）
-              Expanded(
-                flex: 4,
-                child: _repsCounter(i),
-              ),
+              Expanded(flex: 4, child: _repsCounter(i)),
               const SizedBox(width: 8),
               // 1RM推定
               Expanded(
@@ -1078,7 +1218,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                   alignment: Alignment.centerRight,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 4),
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: kTertiary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
@@ -1122,8 +1264,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                 filled: false,
                 border: InputBorder.none,
                 hintText: 'セットメモ',
-                hintStyle:
-                    AppFonts.inter(fontSize: 11, color: context.cTextSub.withValues(alpha: 0.5)),
+                hintStyle: AppFonts.inter(
+                  fontSize: 11,
+                  color: context.cTextSub.withValues(alpha: 0.5),
+                ),
               ),
               onChanged: (v) {
                 _sets[i].memo = v.trim().isEmpty ? null : v.trim();
@@ -1181,8 +1325,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           borderSide: const BorderSide(color: kPrimary, width: 1),
         ),
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       ),
       onChanged: (v) {
         final parsed = double.tryParse(v);
@@ -1246,10 +1389,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
             ),
           ),
         ),
-        _counterBtn(
-          icon: Icons.add,
-          onTap: () => _setReps(i, reps + 1),
-        ),
+        _counterBtn(icon: Icons.add, onTap: () => _setReps(i, reps + 1)),
       ],
     );
   }
@@ -1263,10 +1403,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     _triggerSave();
   }
 
-  Widget _counterBtn({
-    required IconData icon,
-    required VoidCallback? onTap,
-  }) {
+  Widget _counterBtn({required IconData icon, required VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1282,7 +1419,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         child: Icon(
           icon,
           size: 16,
-          color: onTap != null ? context.cText : context.cTextSub.withValues(alpha: 0.3),
+          color: onTap != null
+              ? context.cText
+              : context.cTextSub.withValues(alpha: 0.3),
         ),
       ),
     );
@@ -1290,76 +1429,34 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
   // ── ボトムバー（セット追加 ＋ 次の種目） ──────────────────
 
-  Widget _buildBottomBar() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: _addSet,
-              child: Container(
-                width: double.infinity,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.cBorderSub, width: 1),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add, color: context.cTextSub, size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      'セットを追加',
-                      style: AppFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: context.cTextSub,
-                      ),
-                    ),
-                  ],
+  /// セット追加のみ（次の種目は＋ボタンで今日の記録に追加する）
+  Widget _buildAddSetOnlyBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: GestureDetector(
+        onTap: _addSet,
+        child: Container(
+          width: double.infinity,
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.cBorderSub, width: 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add, color: context.cTextSub, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'セットを追加',
+                style: AppFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: context.cTextSub,
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _showAddNextExercise,
-              child: Container(
-                width: double.infinity,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: kPrimary,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: kPrimary.withValues(alpha: 0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.add_circle_outline,
-                        color: Colors.white, size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      '次の種目',
-                      style: AppFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1370,98 +1467,15 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     final prevSet = _sets.isNotEmpty ? _sets.last : null;
     final initWeight = prevSet?.weight ?? 0.0;
     final initReps = prevSet?.reps ?? 0;
-    final newSet =
-        WorkoutSet(setNumber: num, weight: initWeight, reps: initReps);
+    final newSet = WorkoutSet(
+      setNumber: num,
+      weight: initWeight,
+      reps: initReps,
+    );
     _weightCtrl.add(TextEditingController(text: _formatWeight(initWeight)));
     _repsCtrl.add(TextEditingController(text: initReps > 0 ? '$initReps' : ''));
     _setMemoCtrl.add(TextEditingController());
     setState(() => _sets.add(newSet));
     _triggerSave();
-  }
-
-  Future<void> _showAddNextExercise() async {
-    _commitSave();
-    final targetSession = widget.sessionId != null
-        ? (await SessionManager.instance.getAllSessions())
-            .where((s) => s.id == widget.sessionId)
-            .firstOrNull
-        : SessionManager.instance.active;
-
-    final doneNames = Set<String>.from(
-      targetSession?.exercises.map((e) => e.name) ?? [],
-    );
-    if (!mounted) return;
-    final routineNames = SessionManager.instance.routineExerciseNames;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => ExercisePickerSheet(
-        title: '次の種目を選択',
-        markedNames: doneNames,
-        headerSlot: _buildSessionPreview(targetSession),
-        priorityNames: routineNames,
-        allowMarkedTap: true,
-        onSelected: (exercise) {
-          final existingEx = targetSession?.exercises
-              .where((e) => e.name == exercise.name)
-              .firstOrNull;
-
-          if (existingEx != null && targetSession != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ExerciseRecordScreen(
-                  exercise: existingEx,
-                  sessionId: targetSession.id,
-                ),
-              ),
-            );
-          } else {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ExerciseRecordScreen(
-                  exercise: exercise,
-                  sessionId: widget.sessionId,
-                ),
-              ),
-            );
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildSessionPreview([WorkoutSession? session]) {
-    session ??= SessionManager.instance.active;
-    if (session == null || session.exercises.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.cCardHigh,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.fitness_center, size: 14, color: kPrimary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '記録済み: ${session.exercises.map((e) => e.name).join(' · ')}',
-              style: AppFonts.jetBrainsMono(
-                fontSize: 10,
-                color: context.cTextSub,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

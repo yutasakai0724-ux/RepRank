@@ -95,6 +95,37 @@ class _MyAppState extends State<MyApp> {
 
   void _onSettingsChanged() => setState(() {});
 
+  /// 全ページ共通のフッターを、Navigator（全画面）の下に固定表示する。
+  /// キーボード表示中は隠して、各画面の入力欄がキーボードに隠れないようにする。
+  Widget _withMainFooter(BuildContext context, Widget child) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: mainFooterVisible,
+      child: child,
+      builder: (context, visible, child) {
+        final mq = MediaQuery.of(context);
+        final show = visible && mq.viewInsets.bottom == 0;
+        return Column(
+          children: [
+            Expanded(
+              child: show
+                  ? MediaQuery(
+                      // フッターが下端の安全領域を担当するため、各画面からは取り除く
+                      data: mq.removePadding(removeBottom: true),
+                      child: child!,
+                    )
+                  : child!,
+            ),
+            if (show)
+              ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: const MainBottomBar(),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -110,7 +141,7 @@ class _MyAppState extends State<MyApp> {
         ),
         child: Stack(
           children: [
-            child!,
+            _withMainFooter(context, child!),
             const RestTimerOverlay(),
           ],
         ),
@@ -137,11 +168,13 @@ class _AuthGateState extends State<_AuthGate> {
     // 休憩タイマー通知タップ → 該当種目の記録画面へ遷移
     NotificationService.instance.setNavigationHandler(_navigateToExerciseTimer);
     // 通知の「タイマーをリセット」ボタン → 該当種目の休憩タイマーを停止
-    NotificationService.instance
-        .setResetHandler((key) => RestTimerService.instance.stop(key));
+    NotificationService.instance.setResetHandler(
+      (key) => RestTimerService.instance.stop(key),
+    );
     // 通知の「タイマーをリセット」（ワークアウト時間） → ストップウォッチをリセット
-    NotificationService.instance
-        .setStopwatchResetHandler(() => StopwatchService.instance.reset());
+    NotificationService.instance.setStopwatchResetHandler(
+      () => StopwatchService.instance.reset(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _checkPrivacyConsent();
       await _checkTutorial();
@@ -159,15 +192,17 @@ class _AuthGateState extends State<_AuthGate> {
 
     if (exercise == null) {
       final active = SessionManager.instance.active;
-      exercise =
-          active?.exercises.where((e) => e.name == exerciseKey).firstOrNull;
+      exercise = active?.exercises
+          .where((e) => e.name == exerciseKey)
+          .firstOrNull;
       sessionId = active?.id;
     }
     if (exercise == null) {
       final sessions = await SessionManager.instance.getAllSessions();
       for (final s in sessions) {
-        final found =
-            s.exercises.where((e) => e.name == exerciseKey).firstOrNull;
+        final found = s.exercises
+            .where((e) => e.name == exerciseKey)
+            .firstOrNull;
         if (found != null) {
           exercise = found;
           sessionId = s.id;
@@ -179,10 +214,8 @@ class _AuthGateState extends State<_AuthGate> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ExerciseRecordScreen(
-          exercise: exercise!,
-          sessionId: sessionId,
-        ),
+        builder: (_) =>
+            ExerciseRecordScreen(exercise: exercise!, sessionId: sessionId),
       ),
     );
   }
@@ -199,23 +232,27 @@ class _AuthGateState extends State<_AuthGate> {
   Future<void> _checkPrivacyConsent() async {
     final consented = await UserPreferences.instance.hasConsentedToPrivacy();
     if (consented || !mounted) return;
+    mainFooterVisible.value = false;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const PrivacyConsentScreen(),
         fullscreenDialog: true,
       ),
     );
+    mainFooterVisible.value = true;
   }
 
   Future<void> _checkTutorial() async {
     final seen = await UserPreferences.instance.hasTutorialSeen();
     if (seen || !mounted) return;
-    Navigator.of(context).push(
+    mainFooterVisible.value = false;
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const TutorialScreen(),
         fullscreenDialog: true,
       ),
     );
+    mainFooterVisible.value = true;
   }
 
   Future<void> _checkNotificationPrompt() async {
@@ -229,9 +266,13 @@ class _AuthGateState extends State<_AuthGate> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('通知を許可しますか？',
-            style: AppFonts.inter(
-                fontWeight: FontWeight.w700, color: context.cText)),
+        title: Text(
+          '通知を許可しますか？',
+          style: AppFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
+        ),
         content: Text(
           'トレーニング時間の計測・休憩タイマーの終了をお知らせするために通知を使用します。'
           'アプリを離れていても経過時間や残り時間を確認できます。',
@@ -240,14 +281,17 @@ class _AuthGateState extends State<_AuthGate> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('後で',
-                style: AppFonts.inter(color: context.cTextSub)),
+            child: Text('後で', style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('許可する',
-                style: AppFonts.inter(
-                    color: kPrimary, fontWeight: FontWeight.w700)),
+            child: Text(
+              '許可する',
+              style: AppFonts.inter(
+                color: kPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -273,40 +317,41 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
-  int _currentIndex = 0;
+  static const _screenNames = ['analysis', 'history', 'routines', 'profile'];
 
   @override
   void initState() {
     super.initState();
-    mainTabRequest.addListener(_onTabRequested);
+    mainTabIndex.addListener(_onTabChanged);
+    // 全画面共通フッターを有効化（ビルド中の通知を避けるため次フレームで）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      mainFooterVisible.value = true;
+    });
   }
 
   @override
   void dispose() {
-    mainTabRequest.removeListener(_onTabRequested);
+    mainTabIndex.removeListener(_onTabChanged);
+    mainFooterVisible.value = false;
     super.dispose();
   }
 
-  /// 詳細画面のフッターからのタブ切替要求
-  void _onTabRequested() {
-    final i = mainTabRequest.value;
-    if (i != null && i != _currentIndex) _onTabTapped(i);
-  }
-
-  static const _screenNames = ['analysis', 'history', 'routines', 'profile'];
-
-  void _onTabTapped(int index) {
-    setState(() => _currentIndex = index);
-    AnalyticsService.instance.logScreenView(_screenNames[index]);
+  void _onTabChanged() {
+    AnalyticsService.instance.logScreenView(_screenNames[mainTabIndex.value]);
   }
 
   Widget _buildScreen(int index) {
     switch (index) {
-      case 0: return const AnalysisScreen();
-      case 1: return const HistoryScreen();
-      case 2: return const RoutinesScreen();
-      case 3: return const ProfileScreen();
-      default: return const AnalysisScreen();
+      case 0:
+        return const AnalysisScreen();
+      case 1:
+        return const HistoryScreen();
+      case 2:
+        return const RoutinesScreen();
+      case 3:
+        return const ProfileScreen();
+      default:
+        return const AnalysisScreen();
     }
   }
 
@@ -315,14 +360,15 @@ class _MainNavigationState extends State<MainNavigation> {
     return Scaffold(
       body: Column(
         children: [
-          Expanded(child: _buildScreen(_currentIndex)),
+          Expanded(
+            child: ValueListenableBuilder<int>(
+              valueListenable: mainTabIndex,
+              builder: (_, index, _) => _buildScreen(index),
+            ),
+          ),
           const BannerAdWidget(),
         ],
       ),
-      floatingActionButton: MainBottomBar.addButton(context),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar:
-          MainBottomBar(currentIndex: _currentIndex, onTap: _onTabTapped),
     );
   }
 }
