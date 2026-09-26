@@ -44,6 +44,7 @@ void _resetManager(_MockRepo repo) {
 
 void main() {
   renameTests();
+  previousRecordTests();
   late _MockRepo repo;
 
   setUp(() {
@@ -295,5 +296,52 @@ void renameTests() {
         expect(s.updatedAt, isNotNull);
       }
     });
+  });
+}
+
+// ── getPreviousExerciseRecord（過去記録の編集では、その日より前を「前回」にする）──
+void previousRecordTests() {
+  test('過去の記録を編集するとき、それより新しい記録は「前回」にならない', () async {
+    SharedPreferences.setMockInitialValues({});
+    final repo = _MockRepo();
+    SessionManager.instance.reset();
+    SessionManager.instance.init(repo);
+    WorkoutSession mk(int daysAgo, double w) => WorkoutSession(
+          date: DateTime.now().subtract(Duration(days: daysAgo)),
+          startedAt: DateTime.now().subtract(Duration(days: daysAgo)),
+          exercises: [
+            Exercise(
+              name: 'ベンチプレス',
+              muscleGroup: MuscleGroup.chest,
+              sets: [WorkoutSet(setNumber: 1, weight: w, reps: 5)],
+            ),
+          ],
+        );
+    final d10 = mk(10, 60), d5 = mk(5, 70), d0 = mk(0, 80);
+    for (final s in [d10, d5, d0]) {
+      await repo.upsertSession(s);
+    }
+
+    // 5日前の記録を編集中 → 前回は10日前
+    final prev = await SessionManager.instance
+        .getPreviousExerciseRecord('ベンチプレス', excludeSessionId: d5.id);
+    expect(prev?.sessionId, d10.id);
+
+    // 最古の記録を編集中 → 前回なし
+    final none = await SessionManager.instance
+        .getPreviousExerciseRecord('ベンチプレス', excludeSessionId: d10.id);
+    expect(none, isNull);
+
+    // 新規記録（基準なし）→ 一番新しい記録
+    final latest = await SessionManager.instance
+        .getPreviousExerciseRecord('ベンチプレス');
+    expect(latest?.sessionId, d0.id);
+
+    // 日付を指定した新規記録 → その日より前
+    final before = await SessionManager.instance.getPreviousExerciseRecord(
+      'ベンチプレス',
+      beforeDate: DateTime.now().subtract(const Duration(days: 7)),
+    );
+    expect(before?.sessionId, d10.id);
   });
 }

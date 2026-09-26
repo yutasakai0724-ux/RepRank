@@ -173,6 +173,7 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     final record = await SessionManager.instance.getPreviousExerciseRecord(
       widget.exercise.name,
       excludeSessionId: widget.sessionId,
+      beforeDate: _target, // 今日以外への新規記録は、その日より前を「前回」にする
     );
     if (mounted) {
       setState(() {
@@ -342,7 +343,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     final d = widget.targetDate;
     if (d == null) return null;
     final n = DateTime.now();
-    return (d.year == n.year && d.month == n.month && d.day == n.day) ? null : d;
+    return (d.year == n.year && d.month == n.month && d.day == n.day)
+        ? null
+        : d;
   }
 
   /// 開始し忘れの確認を出した日（アプリ起動中は1日1回まで）
@@ -372,11 +375,16 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
           backgroundColor: context.cCardLow,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('トレーニングを開始しますか？',
-              style: AppFonts.inter(
-                  fontWeight: FontWeight.w700, color: context.cText)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'トレーニングを開始しますか？',
+            style: AppFonts.inter(
+              fontWeight: FontWeight.w700,
+              color: context.cText,
+            ),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,9 +405,25 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
                           setLocal(() => dontShowAgain = v ?? false),
                     ),
                     Expanded(
-                      child: Text('今後は表示しない',
-                          style: AppFonts.inter(
-                              fontSize: 13, color: context.cText)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '今後はこのお知らせを表示しない',
+                            style: AppFonts.inter(
+                              fontSize: 13,
+                              color: context.cText,
+                            ),
+                          ),
+                          Text(
+                            '（設定から変更できます）',
+                            style: AppFonts.inter(
+                              fontSize: 11,
+                              color: context.cTextSub,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -409,14 +433,20 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text('あとで',
-                  style: AppFonts.inter(color: context.cTextSub)),
+              child: Text(
+                'あとで',
+                style: AppFonts.inter(color: context.cTextSub),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text('開始する',
-                  style: AppFonts.inter(
-                      color: kPrimary, fontWeight: FontWeight.w700)),
+              child: Text(
+                '開始する',
+                style: AppFonts.inter(
+                  color: kPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),

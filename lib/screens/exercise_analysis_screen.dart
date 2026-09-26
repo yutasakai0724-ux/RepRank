@@ -6,6 +6,7 @@ import '../data/strength_standards.dart';
 import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
+import 'exercise_history_screen.dart';
 import 'exercise_record_screen.dart';
 import '../widgets/trend_chart_card.dart';
 
@@ -28,9 +29,8 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   double _bodyWeight = 70.0;
   String _gender = '男性';
   late StrengthResult _result;
-  List<_RMPoint> _history = [];
+  List<ExerciseHistoryPoint> _history = [];
   List<_VolumePoint> _volumeHistory = [];
-  bool _historyExpanded = false;
 
   static const int _historyCollapsedCount = 5;
 
@@ -55,43 +55,16 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
 
   Future<void> _loadHistory() async {
     final sessions = await SessionManager.instance.getAllSessions();
-    final Map<String, double> byDate = {};
-    final Map<String, double?> bwByDate = {};
+    final points = buildExerciseHistory(sessions, widget.exercise.name);
     final Map<String, double> volByDate = {};
-    final Map<String, DateTime> dateTimeByDate = {};
-    final Map<String, int> setCountByDate = {};
-    final Map<String, String> sessionIdByDate = {};
-    final Map<String, Exercise> exerciseByDate = {};
     for (final s in sessions) {
       final dateKey = formatYMD(s.date);
-      dateTimeByDate[dateKey] = s.date;
       for (final ex in s.exercises) {
-        if (ex.name != widget.exercise.name) continue;
-        if (ex.sets.isEmpty) continue;
-        final maxRM = ex.sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
-        if (maxRM > (byDate[dateKey] ?? 0)) {
-          byDate[dateKey] = maxRM;
-          bwByDate[dateKey] = s.bodyWeightKg;
-          setCountByDate[dateKey] = ex.sets.length;
-          sessionIdByDate[dateKey] = s.id;
-          exerciseByDate[dateKey] = ex;
-        }
-        final vol = ex.sets.fold(0.0, (sum, s) => sum + s.weight * s.reps);
+        if (ex.name != widget.exercise.name || ex.sets.isEmpty) continue;
+        final vol = ex.sets.fold(0.0, (sum, x) => sum + x.weight * x.reps);
         volByDate[dateKey] = (volByDate[dateKey] ?? 0) + vol;
       }
     }
-    final points = byDate.entries
-        .map((e) => _RMPoint(
-              date: e.key,
-              dateTime: dateTimeByDate[e.key]!,
-              oneRM: e.value,
-              setCount: setCountByDate[e.key] ?? 0,
-              sessionBodyWeightKg: bwByDate[e.key],
-              sessionId: sessionIdByDate[e.key]!,
-              exercise: exerciseByDate[e.key]!,
-            ))
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
     final volPoints = volByDate.entries
         .map((e) => _VolumePoint(date: e.key, volume: e.value))
         .toList()
@@ -341,13 +314,11 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     if (_history.isEmpty) return const SizedBox.shrink();
 
     // 新しい順に並べ替え
-    final sorted = List<_RMPoint>.from(_history)
+    final sorted = List<ExerciseHistoryPoint>.from(_history)
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
     final bestOneRM =
         sorted.map((p) => p.oneRM).reduce((a, b) => a > b ? a : b);
-    final visible = _historyExpanded
-        ? sorted
-        : sorted.take(_historyCollapsedCount).toList();
+    final visible = sorted.take(_historyCollapsedCount).toList();
     final hasMore = sorted.length > _historyCollapsedCount;
 
     return Container(
@@ -370,17 +341,37 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          for (final p in visible) _buildHistoryRow(p, isBest: p.oneRM == bestOneRM),
+          for (final p in visible)
+            ExerciseHistoryRow(
+              point: p,
+              isBest: p.oneRM == bestOneRM,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ExerciseRecordScreen(
+                    exercise: p.exercise,
+                    sessionId: p.sessionId,
+                  ),
+                ),
+              ).then((_) => _loadHistory()),
+            ),
+          // 直近 5 件を超える分は、過去の記録一覧画面で全件を見る
           if (hasMore)
             GestureDetector(
-              onTap: () => setState(() => _historyExpanded = !_historyExpanded),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ExerciseHistoryScreen(
+                    exerciseName: widget.exercise.name,
+                  ),
+                ),
+              ).then((_) => _loadHistory()),
               child: Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Center(
                   child: Text(
-                    _historyExpanded
-                        ? '閉じる'
-                        : 'もっと見る（他 ${sorted.length - _historyCollapsedCount} 件）',
+                    'すべて見る（全 ${sorted.length} 件）',
                     style: AppFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -391,77 +382,6 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               ),
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildHistoryRow(_RMPoint p, {required bool isBest}) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ExerciseRecordScreen(
-            exercise: p.exercise,
-            sessionId: p.sessionId,
-          ),
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isBest
-              ? kTertiary.withValues(alpha: 0.1)
-              : context.cCardHigh.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(10),
-          border: isBest
-              ? Border.all(color: kTertiary.withValues(alpha: 0.4))
-              : null,
-        ),
-        child: Row(
-          children: [
-            if (isBest) ...[
-              const Icon(Icons.star, size: 14, color: kTertiary),
-              const SizedBox(width: 6),
-            ],
-            Expanded(
-              flex: 3,
-              child: Text(
-                formatJpDate(p.dateTime),
-                style: AppFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: context.cText,
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                '${p.setCount}セット',
-                textAlign: TextAlign.center,
-                style: AppFonts.jetBrainsMono(
-                  fontSize: 11,
-                  color: context.cTextSub,
-                ),
-              ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                '${p.oneRM.toStringAsFixed(1)}kg',
-                textAlign: TextAlign.right,
-                style: AppFonts.jetBrainsMono(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: isBest ? kTertiary : kPrimaryLight,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 16, color: context.cBorder),
-          ],
-        ),
       ),
     );
   }
@@ -898,25 +818,6 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
       case StrengthTier.elite:        return Icons.emoji_events;
     }
   }
-}
-
-class _RMPoint {
-  final String date;
-  final DateTime dateTime;
-  final double oneRM;
-  final int setCount;
-  final double? sessionBodyWeightKg;
-  final String sessionId;
-  final Exercise exercise;
-  const _RMPoint({
-    required this.date,
-    required this.dateTime,
-    required this.oneRM,
-    required this.setCount,
-    required this.sessionId,
-    required this.exercise,
-    this.sessionBodyWeightKg,
-  });
 }
 
 class _VolumePoint {

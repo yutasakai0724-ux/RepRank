@@ -275,15 +275,30 @@ class SessionManager extends ChangeNotifier {
 
   /// 指定種目を直近に記録したセッションでのその種目の記録（全セット）を返す。
   /// 「前回の記録」表示・ペースト機能用。現在編集中のセッションは除外。
+  ///
+  /// 基準日より**前の日**の記録だけを対象にする（過去の記録を編集しているとき、
+  /// それより新しい記録を「前回」にしないため）。基準日は [beforeDate]、
+  /// 無ければ [excludeSessionId] のセッションの日付。どちらも無ければ日付で絞らない。
   Future<({Exercise exercise, String sessionId})?> getPreviousExerciseRecord(
     String exerciseName, {
     String? excludeSessionId,
+    DateTime? beforeDate,
   }) async {
     final sessions = await _repo.getAllSessions();
+    DateTime dayOf(DateTime d) => DateTime(d.year, d.month, d.day);
+    var ref = beforeDate;
+    if (ref == null && excludeSessionId != null) {
+      ref = sessions
+          .where((s) => s.id == excludeSessionId)
+          .map((s) => s.date)
+          .firstOrNull;
+    }
+    final refDay = ref == null ? null : dayOf(ref);
     final candidates = sessions.where(
       (s) =>
           s.id != _active?.id &&
           s.id != excludeSessionId &&
+          (refDay == null || dayOf(s.date).isBefore(refDay)) &&
           s.exercises.any((e) => e.name == exerciseName),
     );
     if (candidates.isEmpty) return null;
