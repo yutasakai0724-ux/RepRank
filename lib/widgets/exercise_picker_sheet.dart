@@ -4,6 +4,7 @@ import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/auth_service.dart';
+import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 
 /// 部位別アコーディオン形式の種目選択ボトムシート。
@@ -35,6 +36,12 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   List<String> _favorites = [];
   List<String> _exerciseOrder = [];
   String _searchQuery = '';
+
+  /// 追加した種目の名前（編集・削除できるのはこれだけ。標準の種目は固定）
+  Set<String> _customNames = {};
+
+  /// 編集モード: 追加した種目に編集・削除ボタンを表示する
+  bool _editMode = false;
   final _searchCtrl = TextEditingController();
 
   // ExpansionTileの開閉状態をグループごとに管理（お気に入り操作で崩れないよう）
@@ -66,16 +73,189 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   }
 
   Future<void> _loadData() async {
-    final custom = await UserPreferences.instance.getCustomExercises();
-    final favs = await UserPreferences.instance.getFavoriteExercises();
-    final order = await UserPreferences.instance.getExerciseOrder();
+    final prefs = UserPreferences.instance;
+    final custom = await prefs.getCustomExercises();
+    final favs = await prefs.getFavoriteExercises();
+    final order = await prefs.getExerciseOrder();
+
+    // 別端末で追加・名前変更された種目は、記録にだけ名前が残る。
+    // 標準・追加分・削除済みのどれにも無い名前を、追加した種目として補う。
+    final known = <String>{
+      for (final e in defaultExercises) e['name'] as String,
+      for (final e in custom) e['name'] as String,
+      ...await prefs.getDeletedCustomExercises(),
+    };
+    try {
+      final sessions = await SessionManager.instance.getAllSessionsCached();
+      for (final s in sessions) {
+        for (final e in s.exercises) {
+          if (known.add(e.name)) {
+            custom.add({'name': e.name, 'group': e.muscleGroup});
+            await prefs.addCustomExercise(e.name, e.muscleGroup);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[Exercises] merge from records failed: $e');
+    }
+
     if (mounted) {
       setState(() {
-        if (custom.isNotEmpty) _exercises.addAll(custom);
+        _exercises = List.from(defaultExercises)..addAll(custom);
+        _customNames = {for (final e in custom) e['name'] as String};
         _favorites = favs;
         _exerciseOrder = order;
       });
     }
+  }
+
+  /// 追加した種目の編集ダイアログ（名前・部位）。保存すると過去の記録も書き換える。
+  Future<void> _showEditExerciseDialog(String oldName, MuscleGroup oldGroup) async {
+    final nameCtrl = TextEditingController(text: oldName);
+    var group = oldGroup;
+    String? error;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: context.cCardLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('種目を編集',
+              style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                style: AppFonts.inter(color: context.cText),
+                decoration: InputDecoration(
+                  hintText: '種目名',
+                  errorText: error,
+                  hintStyle: AppFonts.inter(color: context.cTextSub),
+                  enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: context.cBorderSub)),
+                  focusedBorder:
+                      const UnderlineInputBorder(borderSide: BorderSide(color: kPrimary)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              InputDecorator(
+                decoration: InputDecoration(
+                  labelText: '部位',
+                  labelStyle: AppFonts.inter(color: context.cTextSub, fontSize: 12),
+                  enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: context.cBorderSub)),
+                ),
+                child: DropdownButton<MuscleGroup>(
+                  value: group,
+                  isExpanded: true,
+                  dropdownColor: context.cCardLow,
+                  underline: const SizedBox.shrink(),
+                  style: AppFonts.inter(color: context.cText, fontSize: 14),
+                  items: _groupOrder
+                      .map((g) => DropdownMenuItem(value: g, child: Text(g.label)))
+                      .toList(),
+                  onChanged: (g) => setDlg(() => group = g!),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('キャンセル', style: AppFonts.inter(color: context.cTextSub)),
+            ),
+            TextButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) {
+                  setDlg(() => error = '種目名を入力してください');
+                } else if (name != oldName &&
+                    _exercises.any((e) => e['name'] == name)) {
+                  setDlg(() => error = '同じ名前の種目がすでにあります');
+                } else {
+                  Navigator.pop(ctx, true);
+                }
+              },
+              child: Text('保存',
+                  style: AppFonts.inter(color: kPrimary, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+    final newName = nameCtrl.text.trim();
+    nameCtrl.dispose();
+    if (saved != true || !mounted) return;
+    if (newName == oldName && group == oldGroup) return;
+
+    final sm = SessionManager.instance;
+    final count = await sm.countSessionsWithExercise(oldName);
+    if (!mounted) return;
+    if (count > 0) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: context.cCardLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('過去の記録も変更します',
+              style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+          content: Text(
+            '「$oldName」を含む過去の記録 $count 件の種目名・部位も、新しい内容に書き換えます。',
+            style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('キャンセル', style: AppFonts.inter(color: context.cTextSub)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('変更する',
+                  style: AppFonts.inter(color: kPrimary, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      await sm.renameExercise(oldName, newName, group);
+    }
+    await UserPreferences.instance.updateCustomExercise(oldName, newName, group);
+    if (newName != oldName) await _syncExerciseToFirestore(newName, group);
+    await _loadData();
+  }
+
+  /// 追加した種目を一覧から削除する（過去の記録は残る）。
+  Future<void> _confirmDeleteExercise(String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cCardLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('種目を削除',
+            style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+        content: Text(
+          '「$name」を種目一覧から削除します。過去の記録はそのまま残ります。',
+          style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('キャンセル', style: AppFonts.inter(color: context.cTextSub)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('削除',
+                style: AppFonts.inter(
+                    color: Colors.red.shade400, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await UserPreferences.instance.removeCustomExercise(name);
+    await _loadData();
   }
 
   Future<void> _syncExerciseToFirestore(String name, MuscleGroup group) async {
@@ -225,9 +405,12 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   }) {
     final isMarked = widget.markedNames.contains(name);
     final isFav = _favorites.contains(name);
+    final isCustom = _customNames.contains(name);
     return GestureDetector(
       key: key,
-      onTap: (isMarked && !widget.allowMarkedTap)
+      onTap: _editMode
+          ? (isCustom ? () => _showEditExerciseDialog(name, group) : null)
+          : (isMarked && !widget.allowMarkedTap)
           ? null
           : () {
               Navigator.pop(context);
@@ -270,6 +453,28 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 ),
               ),
             ),
+            if (_editMode) ...[
+              if (isCustom) ...[
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showEditExerciseDialog(name, group),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Icon(Icons.edit_outlined, size: 18, color: kPrimary),
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _confirmDeleteExercise(name),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Icon(Icons.delete_outline,
+                        size: 18, color: Colors.red.shade400),
+                  ),
+                ),
+              ] else
+                Icon(Icons.lock_outline, size: 16, color: context.cBorder),
+            ] else ...[
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _toggleFavorite(name),
@@ -286,6 +491,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               const Icon(Icons.check, color: kTertiary, size: 16)
             else
               Icon(Icons.chevron_right, color: context.cBorder, size: 18),
+            ],
           ],
         ),
       ),
@@ -463,12 +669,32 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    widget.title,
-                    style: AppFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: context.cText,
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: context.cText,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _editMode = !_editMode),
+                    icon: Icon(_editMode ? Icons.check : Icons.edit_outlined,
+                        size: 16, color: kPrimary),
+                    label: Text(
+                      _editMode ? '完了' : '種目を編集',
+                      style: AppFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: kPrimary,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                     ),
                   ),
                   TextButton.icon(

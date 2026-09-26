@@ -90,6 +90,67 @@ class UserPreferences {
       raw.add('$name|${group.name}');
       await prefs.setStringList(_keyCustomExercises, raw);
     }
+    // 削除済みの名前を再び追加した場合は、削除済みの印を外す
+    await _setDeleted(name, false);
+  }
+
+  /// 削除した追加種目の名前。過去の記録に名前が残っていても、種目一覧へ自動で復活させない
+  /// （別端末の記録から名前を補う処理の対象外にする）ために覚えておく。
+  static const _keyDeletedCustom = 'deleted_custom_exercises';
+
+  Future<Set<String>> getDeletedCustomExercises() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_keyDeletedCustom) ?? []).toSet();
+  }
+
+  Future<void> _setDeleted(String name, bool deleted) async {
+    final prefs = await SharedPreferences.getInstance();
+    final set = (prefs.getStringList(_keyDeletedCustom) ?? []).toSet();
+    final changed = deleted ? set.add(name) : set.remove(name);
+    if (changed) await prefs.setStringList(_keyDeletedCustom, set.toList());
+  }
+
+  /// 追加した種目の名前・部位を変更する。
+  /// お気に入り・表示順・ルーチン内の種目名も新しい名前に更新する。
+  Future<void> updateCustomExercise(
+      String oldName, String newName, MuscleGroup group) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_keyCustomExercises) ?? [];
+    final idx = raw.indexWhere((s) => s.startsWith('$oldName|'));
+    final entry = '$newName|${group.name}';
+    if (idx >= 0) {
+      raw[idx] = entry;
+    } else {
+      raw.add(entry);
+    }
+    await prefs.setStringList(_keyCustomExercises, raw);
+
+    if (oldName != newName) {
+      List<String> swap(List<String> l) =>
+          [for (final n in l) n == oldName ? newName : n];
+      await setFavoriteExercises(swap(await getFavoriteExercises()));
+      await setExerciseOrder(swap(await getExerciseOrder()));
+      final routines = await getRoutines();
+      for (final r in routines) {
+        r['exercises'] = swap(List<String>.from(r['exercises'] as List));
+      }
+      await saveRoutines(routines);
+      await _setDeleted(oldName, true);
+      await _setDeleted(newName, false);
+    }
+  }
+
+  /// 追加した種目を一覧から削除する（過去の記録は残る）。
+  Future<void> removeCustomExercise(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_keyCustomExercises) ?? [];
+    raw.removeWhere((s) => s.startsWith('$name|'));
+    await prefs.setStringList(_keyCustomExercises, raw);
+    await setFavoriteExercises(
+        (await getFavoriteExercises()).where((n) => n != name).toList());
+    await setExerciseOrder(
+        (await getExerciseOrder()).where((n) => n != name).toList());
+    await _setDeleted(name, true);
   }
 
   // ── チュートリアル表示済みフラグ ─────────────────────────────

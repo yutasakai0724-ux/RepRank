@@ -43,6 +43,7 @@ void _resetManager(_MockRepo repo) {
 }
 
 void main() {
+  renameTests();
   late _MockRepo repo;
 
   setUp(() {
@@ -258,6 +259,41 @@ void main() {
 
       final afterDelete = await repo.getAllSessions();
       expect(afterDelete.length, 0);
+    });
+  });
+}
+
+// ── renameExercise / 追加種目の編集 ─────────────────────────────
+void renameTests() {
+  group('renameExercise', () {
+    test('名前と部位を全記録で書き換え、他の種目は変えない', () async {
+      SharedPreferences.setMockInitialValues({});
+      final repo = _MockRepo();
+      SessionManager.instance.reset();
+      SessionManager.instance.init(repo);
+      for (final d in [3, 10]) {
+        await repo.upsertSession(WorkoutSession(
+          date: DateTime.now().subtract(Duration(days: d)),
+          startedAt: DateTime.now().subtract(Duration(days: d)),
+          exercises: [
+            Exercise(name: '独自種目', muscleGroup: MuscleGroup.chest),
+            Exercise(name: 'スクワット', muscleGroup: MuscleGroup.legs),
+          ],
+        ));
+      }
+      expect(await SessionManager.instance.countSessionsWithExercise('独自種目'), 2);
+      final n = await SessionManager.instance
+          .renameExercise('独自種目', '新名称', MuscleGroup.back);
+      expect(n, 2);
+      final all = await repo.getAllSessions();
+      for (final s in all) {
+        expect(s.exercises.any((e) => e.name == '独自種目'), isFalse);
+        final e = s.exercises.firstWhere((e) => e.name == '新名称');
+        expect(e.muscleGroup, MuscleGroup.back);
+        expect(s.exercises.firstWhere((e) => e.name == 'スクワット').muscleGroup,
+            MuscleGroup.legs);
+        expect(s.updatedAt, isNotNull);
+      }
     });
   });
 }

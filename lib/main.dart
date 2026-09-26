@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'utils/app_fonts.dart';
 import 'theme.dart';
@@ -145,6 +146,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return MaterialApp(
       navigatorKey: rootNavigatorKey,
       title: 'Rep Rank',
+      // ロケールを日本語に固定する。指定しないと端末の言語が日本語でない場合に、
+      // Inter などに無い漢字が中国語の字形（「位」「改」「望」「糸」偏など）で表示される。
+      locale: const Locale('ja', 'JP'),
+      supportedLocales: const [Locale('ja', 'JP')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       debugShowCheckedModeBanner: false,
       themeMode: AppSettings.instance.themeMode,
       theme: buildLightTheme(),

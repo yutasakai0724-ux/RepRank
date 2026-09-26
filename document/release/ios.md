@@ -171,6 +171,21 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // バグ報告（誰でも送信可、読み取り・更新・削除は不可）
+    match /bug_reports/{docId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+
+    // 共有カスタム種目（ログインユーザーのみ作成・読み取り可、更新・削除は不可）
+    // ドキュメントIDは種目名。アプリは追加・名前変更のとき、未登録の名前だけ作成する。
+    // 名前を変えても古い名前のドキュメントは残る（削除できないため）。
+    match /exercises/{exerciseName} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update, delete: if false;
+    }
+
     // 上記以外のドキュメントはすべて拒否
     match /{document=**} {
       allow read, write: if false;

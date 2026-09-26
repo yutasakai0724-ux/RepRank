@@ -4,7 +4,7 @@
 
 | ファイル | 内容 |
 |---|---|
-| [spec.md](spec.md) | アプリ仕様書（データモデル・画面構成・技術スタック） |
+| [spec.md](spec.md) | アプリ仕様書（画面構成・データモデル・主要機能・同期・Firebase 構成） |
 | [test_checklist.md](test_checklist.md) | 手動テスト確認項目チェックリスト |
 | [build_guide.md](build_guide.md) | 目的別ビルド方法早見表（シミュレータ確認・実機・提出用） |
 | [CHANGELOG.md](CHANGELOG.md) | バージョンごとの変更履歴 |

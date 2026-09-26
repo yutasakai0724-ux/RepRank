@@ -227,6 +227,39 @@ class SessionManager extends ChangeNotifier {
     _cache = null;
   }
 
+  /// 指定名の種目を含む記録（セッション）の数。
+  Future<int> countSessionsWithExercise(String name) async {
+    final sessions = await _repo.getAllSessions();
+    return sessions.where((s) => s.exercises.any((e) => e.name == name)).length;
+  }
+
+  /// 種目の名前・部位を、全記録で書き換える（追加した種目の編集用）。
+  /// 書き換えた記録は更新日時が新しくなり、ログイン中はクラウドにも反映される。
+  /// 書き換えたセッション数を返す。
+  Future<int> renameExercise(
+      String oldName, String newName, MuscleGroup group) async {
+    final sessions = await _repo.getAllSessions();
+    var count = 0;
+    for (var s in sessions) {
+      // 進行中のセッションは、メモリ上のものを更新して保存する（古い内容で上書きされないように）
+      if (_active?.id == s.id) s = _active!;
+      var changed = false;
+      for (final e in s.exercises) {
+        if (e.name == oldName) {
+          e.name = newName;
+          e.muscleGroup = group;
+          changed = true;
+        }
+      }
+      if (changed) {
+        await _save(s);
+        count++;
+      }
+    }
+    if (count > 0) notifyListeners();
+    return count;
+  }
+
   /// 指定種目の過去最高ベストセット（1RM が最大のセット）
   Future<WorkoutSet?> getPreviousBest(String exerciseName) async {
     final sessions = await _repo.getAllSessions();

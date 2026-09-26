@@ -1,18 +1,19 @@
 # Rep Rank — アプリ仕様書
 
-**バージョン**: 1.0.0  
-**作成日**: 2026-06-15  
+**バージョン**: 1.2.6（ビルド 13）  
+**最終更新**: 2026-09-27  
 **バンドル ID**: `com.yutasakai.reprank`  
-**対象プラットフォーム**: iOS（メイン）、Android（予定）
+**対象プラットフォーム**: iOS・Android  
+**表示言語**: 日本語（ロケールを `ja_JP` に固定）
 
 ---
 
 ## 1. アプリ概要
 
-筋トレの記録・分析に特化したシンプルなアプリ。重量と回数を入力するだけで 1RM を自動推定し、体重比による強度ティア（初心者〜エリート）を表示する。オフラインファースト設計で、アカウント登録によりクラウド同期が可能。
+筋トレの記録・分析に特化したシンプルなアプリ。重量と回数を入力するだけで 1RM（1回だけ挙げられる最大重量）を自動推定し、体重比による強度ティア（初心者〜エリート）を表示する。オフラインファースト設計で、アカウント登録（ログイン）によりクラウド同期が可能。
 
 ### コンセプト
-- 記録のハードルを極力下げる（種目選択 → 重量・回数入力 → 保存）
+- 記録のハードルを極力下げる（種目選択 → 重量・回数入力 → 自動保存）
 - 自分の「強さ」を客観的な指標で可視化する
 - シンプルさを最優先（不要な機能を持たない）
 
@@ -23,14 +24,17 @@
 | 項目 | 内容 |
 |---|---|
 | フレームワーク | Flutter（Dart） |
-| ローカル DB | SQLite（sqflite） |
+| ローカル DB | SQLite（sqflite、スキーマ v4） |
 | クラウド DB | Firebase Firestore |
-| 認証 | Firebase Authentication（メール/Google/Apple） |
-| 分析 | Firebase Analytics |
-| クラッシュ | Firebase Crashlytics |
+| 認証 | Firebase Authentication（メール / Google / Apple、匿名） |
+| 分析・クラッシュ | Firebase Analytics / Crashlytics |
 | 広告 | Google AdMob（バナー・リワード） |
+| 通知 | flutter_local_notifications（休憩タイマー・ストップウォッチ・トレーニング時間） |
+| ロック画面表示 | iOS Live Activities（Widget Extension）、Android 常駐通知（chronometer） |
+| グラフ | 自作 CustomPainter（`TrendChartCard`） |
 | フォント | Google Fonts（Inter, JetBrains Mono） |
-| 状態管理 | StatefulWidget（Provider/Riverpod 未使用） |
+| 状態管理 | StatefulWidget ＋ ChangeNotifier / ValueNotifier のシングルトン |
+| 設定保存 | SharedPreferences |
 
 ---
 
@@ -38,351 +42,355 @@
 
 ### 3-1. WorkoutSession（セッション）
 
-1回のトレーニングセッション全体。
+1日のトレーニングのまとまり。同じ日に複数あってもよい（画面では1日1枚のカードに統合して表示する）。
 
 ```
 WorkoutSession
 ├── id: String（UUID）
-├── sessionName: String?（任意のセッション名）
-├── routineName: String?（使用したルーティン名）
+├── sessionName / routineName: String?
 ├── date: DateTime（トレーニング日）
-├── startedAt: DateTime（開始時刻）
-├── finishedAt: DateTime?（終了時刻）
-└── exercises: List<Exercise>
+├── startedAt / finishedAt: DateTime（セッション作成・終了の内部時刻）
+├── exercises: List<Exercise>
+├── bodyWeightKg: double?（この記録の体重。体重比の算出に使う）
+├── trainingStartedAt / trainingEndedAt: DateTime?（トレーニング時間。§8）
+└── updatedAt: DateTime?（最終更新。クラウド同期の新旧判定に使う）
 ```
 
 ### 3-2. Exercise（種目）
 
-セッション内の1種目。
-
 ```
 Exercise
-├── id: String（UUID）
-├── name: String（種目名）
-├── muscleGroup: MuscleGroup（部位）
-└── sets: List<WorkoutSet>
+├── id / name / muscleGroup
+├── sets: List<WorkoutSet>
+└── memo: String?（種目全体のメモ）
 ```
+
+種目は**名前で識別**する（記録・お気に入り・並び順・ルーチン・休憩タイマーのキー）。
 
 ### 3-3. WorkoutSet（セット）
 
-種目内の1セット。
-
 ```
 WorkoutSet
-├── id: String（UUID）
-├── setNumber: int（セット番号）
-├── weight: double（重量 kg）
-├── reps: int（回数）
-└── recordedAt: DateTime?（記録時刻）
+├── id / setNumber / weight（kg）/ reps / recordedAt
+└── memo: String?（セットごとのメモ）
 ```
 
-**1RM 計算式**: `weight × reps / 40 + weight`
+**1RM 計算式**: 回数が 2 以上 → `weight × reps / 40 + weight`、回数が 1 以下 → `weight`（そのまま）。
 
 ### 3-4. MuscleGroup（部位）
 
-```
-all / chest（胸）/ back（背中）/ legs（脚）/
-shoulders（肩）/ arms（腕）/ abs（腹筋）
-```
+`chest（胸）/ back（背中）/ legs（脚）/ shoulders（肩）/ arms（腕）/ abs（腹筋）`（＋ 全体表示用の `all`）
+
+### 3-5. ローカル DB（SQLite）
+
+`sessions` テーブル（v4）。種目・セットは `exercises_json` にまとめて保存。v2 で体重、v3 で更新日時、v4 でトレーニング時間の開始・終了の列を追加（アップグレードで自動移行）。
 
 ---
 
 ## 4. 画面構成
 
-ボトムナビゲーション4タブ構成。
+### 4-1. 全体構成と共通フッター
+
+メインは 4 タブ。**フッターは、メイン画面が出ている間、全ページの下に共通で表示**する（`MaterialApp.builder` で Navigator の下に固定）。
+
+```
+フッター:  分析 ｜ カレンダー ｜ ＋（記録）｜ ルーチン ｜ 設定
+```
+
+- **タブのタップ**: 開いている詳細画面を閉じて、メイン画面の該当タブへ移動（記録画面では保存してから移動）。
+- **＋ボタン**: 種目を選び、**今日の日付**で記録を追加する（今日すでに記録のある種目なら、その記録を開く）。角丸四角の大きなボタンで、上端に円形の凹みがある。
+- **非表示**: キーボード表示中、プライバシー同意・チュートリアルの全画面表示中。
 
 ```
 App
 ├── [Tab 0] AnalysisScreen（分析）
 ├── [Tab 1] HistoryScreen（カレンダー）
-├── [Tab 2] RoutinesScreen（ルーティン）
-└── [Tab 3] ProfileScreen（プロフィール）
+├── [Tab 2] RoutinesScreen（ルーチン）
+└── [Tab 3] ProfileScreen（設定）
 ```
 
-### 4-1. 分析画面（AnalysisScreen）
+### 4-2. 分析タブ（AnalysisScreen）
 
-メイン画面。ホームとしての役割を持つ。
-
-**表示内容**
-- ストップウォッチ（ワークアウト全体の経過時間）
-- 今日のセッション一覧（セッションカード）
-- セッションカードをタップ → DailyDetailScreen へ
-- 「今日のトレーニングを開始」ボタン → ExerciseRecordScreen へ
-- 種目ごとの最高 1RM サマリーカード（タップで ExerciseAnalysisScreen へ）
+- AppBar 右: 体重の表示・編集（「体重 ✎」）
+- **ストップウォッチカード**: 経過時間の大表示。START / STOP / RESET。トレーニング時間の記録を有効にすると、トグル・「トレーニング開始」「トレーニング終了」ボタンを表示（§8）
+- **種目別ベスト**: 種目ごとの最高 1RM のカードを部位別に表示。タップで種目別分析へ
+- **体重推移**: 記録日の体重のグラフ
 - 「広告を見て応援する」ボタン（リワード広告）
-- バナー広告（画面下部）
+- 画面下部にバナー広告
 
-### 4-2. カレンダー画面（HistoryScreen）
+### 4-3. カレンダータブ（HistoryScreen）
 
-**表示内容**
-- 月次カレンダー（table_calendar）
-- 記録がある日にはドット表示
-- 日付タップ → その日のセッション一覧
-- セッションタップ → DailyDetailScreen へ
-- スワイプで削除
+- 月次カレンダー。記録のある日にドット表示。日付タップで選択（画面遷移はしない）
+- **種目検索**: 入力すると候補を表示。候補はタップで選ぶ（キーボードの決定キーでは自動選択しない）。検索ボックス外のタップで入力を解除。選んだ種目を含む日だけがカレンダーに表示される
+- **選択日の記録カード（1日1枚）**: その日の全記録を統合して表示（種目行・合計ボリューム・トレーニング時間）
+  - カードのタップ → 日別記録一覧（DailyDetailScreen）
+  - 種目行のタップ → その種目の記録画面
+  - **カードの長押し** → 確認ダイアログのあと、その日の記録をまとめて削除
+  - 種目行右端の kg は、その種目の**推定 1RM の最大値**（実際に挙げた重量の最大ではない）
+- **記録のない日**: 控えめな「この日の記録を追加」ボタン（種目を選んで、その日の日付に記録）
+- 月間サマリー（月間レップ数・総ボリュームなど）、連続日数の表示
 
-### 4-3. ルーティン画面（RoutinesScreen）
+### 4-4. ルーチンタブ（RoutinesScreen）
 
-ユーザーが自由に作成・管理するルーティン一覧。
+- ルーチンカード一覧（名前・部位・種目数・目安時間）。追加・編集（並び替え・削除）
+- タップで RoutineDetailScreen（種目リスト、「このルーチンで開始」）
+- **データは SharedPreferences に永続保存**（`routines_v1`）
 
-**表示内容**
-- ルーティンカード一覧（名前・部位・種目数・目安時間）
-- 追加ボタン → 作成ダイアログ
-- ルーティンタップ → RoutineDetailScreen へ
-- 編集モード（並び替え・削除）
+### 4-5. 設定タブ（ProfileScreen）
 
-**データ**: SharedPreferences に保存（揮発性）
+セクション構成:
 
-### 4-4. プロフィール画面（ProfileScreen）
-
-**表示内容**
-- アカウントカード（未ログイン時はログインボタン）
-- ユーザー名・体重・性別の設定
-- 匿名統計データ共有トグル
-- プライバシーポリシーリンク
-- ログアウトボタン（ログイン時）
+| セクション | 内容 |
+|---|---|
+| ユーザー情報 | ユーザー名・体重・性別・プロフィール画像・kg/lb 単位。保存ボタンで反映 |
+| アカウント | ログイン状態、ログイン / ログアウト |
+| プライバシー | 匿名統計データの共有トグル、プライバシーポリシー |
+| 通知 | 「トレーニング通知」（休憩タイマー等の通知）のオンオフ、端末の通知設定を開く |
+| トレーニング時間 | 「タイマーでトレーニング時間を記録」（初期オフ）、自動終了までの時間、開始し忘れの確認 |
+| 表示設定 | ライト / ダークテーマ、文字サイズ |
+| サポート | 「不具合を報告」（バグ・改善要望の送信） |
+| 統計 | トレーニング回数・継続日数・総ボリューム |
 
 ---
 
 ## 5. サブ画面
 
-### 5-1. DailyDetailScreen
+### 5-1. ExerciseRecordScreen（種目の記録・編集）
 
-特定日の特定セッションの詳細・編集。
+新規記録・既存記録の編集の両方に使う。入力内容は**自動保存**（入力から 0.6 秒後）。実データ（重量・回数・メモ）が無い種目は保存しない。
 
-- 種目リストとセット一覧を表示
-- セット追加・削除・重量/回数の編集
-- 休憩タイマー内蔵（プリセット + カスタム秒数）
-- 種目追加 → ExercisePickerSheet（ボトムシート）
+- **AppBar**: 種目名・部位・**日付**（今日は「今日」、過去日は日付を強調表示）、体重、保存状態、kg/lb 切替
+- **過去日の編集中**: AppBar の下に「○年○月○日の記録を編集中」の帯を表示（日付の混同防止）
+- **休憩タイマーカード**: 画面上部に**固定**。この種目専用のタイマー
+- **スクロール部分**: 前回の記録カード → 種目メモ → 列見出し → セット行
+  - 前回の記録カード: 直近の記録の最初の 3 セットを表示。タップでその記録の編集画面へ。右下の「ペースト」ボタンで、確認ダイアログの 3 択（キャンセル / メモを含めペースト / 記録のみペースト）
+  - 現在の推定 1RM をリアルタイム表示
+  - セット行: 重量・回数（±ボタンとキーボード入力）、セットごとのメモ
+- 下部の「セットを追加」ボタン（次の種目の追加はフッターの＋から）
+- `targetDate` を指定して開くと、その日の記録として追加する。セッションは最初に保存されるときに作成し、その日に既にセッションがあればそれを使う（入力せずに戻っても空の記録は残らない）
 
-### 5-2. ExerciseRecordScreen
+### 5-2. DailyDetailScreen（日別記録一覧）
 
-新規トレーニングセッションの記録。
+- その日のセッションカード（展開で種目・セットを確認。カード長押しで削除）
+- 各カードに**トレーニング時間**の行（開始〜終了と分数）。タップで開始・終了時刻を修正・消去
+- 画面下部（フッターの上）に「この日の記録を追加」ボタン
 
-- セッション名の入力（任意）
-- 種目追加 → ExercisePickerSheet
-- セットの記録（重量・回数）
-- 1RM のリアルタイム計算・表示
-- 保存でセッションを DB に書き込み
+### 5-3. ExerciseAnalysisScreen（種目別分析）
 
-### 5-3. ExerciseAnalysisScreen
+- 現在の最高 1RM、過去の記録リスト（タップでその記録の編集画面へ）
+- 強度レベルバー、次の目標、基準値テーブル
+- **推移グラフ**（1RM / 体重比 / ボリューム）: 表示範囲（週・月・3か月・年）の切替、横スクロール、タップで値を表示。Y 軸は表示範囲に追従
+- ヒストグラム（強度分布）は準備中
 
-特定種目の詳細分析。
+### 5-4. RoutineDetailScreen / AuthScreen / PrivacyConsentScreen / TutorialScreen
 
-- 1RM 推移グラフ（fl_chart）
-- 体重比ティア表示
-- ヒストグラム（将来実装予定）
-
-### 5-4. RoutineDetailScreen
-
-ルーティンの詳細・使用。
-
-- 種目リストの表示
-- 「このルーティンで開始」→ ExerciseRecordScreen へ（種目プリセット）
-
-### 5-5. AuthScreen
-
-ログイン / 新規登録。
-
-- Apple でサインイン
-- Google でサインイン
-- メールアドレス + パスワード
-- パスワードリセット
-
-### 5-6. PrivacyConsentScreen
-
-初回起動時のみ表示。プライバシーポリシー全文 + 同意/拒否ボタン。
+- RoutineDetailScreen: 種目リスト、「このルーチンで開始」
+- AuthScreen: Apple / Google / メール＋パスワード、パスワードリセット
+- PrivacyConsentScreen: 初回のみ。プライバシーポリシーへの同意
+- TutorialScreen: 初回のみ。プロフィール設定・記録方法の案内
 
 ---
 
-## 6. ウィジェット
+## 6. 種目選択シート（ExercisePickerSheet）
 
-| ウィジェット | 役割 |
+- 部位別アコーディオン。**標準種目は各部位とも、定番（BIG3・基本種目）から順に並ぶ**
+- お気に入り（星）と、部位内・お気に入り内のドラッグ並び替え
+- 検索、種目の追加（名前＋部位）
+- **種目の編集・削除（追加した種目のみ）**: 「種目を編集」で編集モードに入り、鉛筆（編集）とゴミ箱（削除）を表示。標準種目は編集不可（鍵アイコン）
+  - 編集: 名前・部位を変更。**過去の全記録の種目名・部位も書き換え**（件数を確認ダイアログで表示）。お気に入り・並び順・ルーチン内の種目名も更新。他の種目と同名にはできない
+  - 削除: 種目一覧から削除（過去の記録は残る）。削除した名前は記録に残っていても一覧に復活しない
+- **別端末との整合**: 開いたとき、記録に出てくる名前のうち一覧にない名前を「追加した種目」として自動で補う
+- 追加した種目の一覧は端末内に保存（同期しない）。ログイン中は共有カタログ `exercises` にも新しい名前を1度だけ登録（更新・削除はしない）
+
+---
+
+## 7. 休憩タイマーとストップウォッチ
+
+### 7-1. 休憩タイマー（RestTimerService）
+
+- **種目ごとに独立**して動く。複数種目のタイマーを同時に実行できる
+- 画面遷移しても継続。記録画面以外では、画面上部に**全画面共通のオーバーレイ**を積み重ねて表示（タップでその種目の記録画面へ）。その種目の記録画面を開いている間は、その種目のオーバーレイを隠す
+- 終了時にアラート通知（設定でオン時）。Android は残り時間の常駐通知（「タイマーをリセット」ボタン付き）、iOS は Live Activities でロック画面・Dynamic Island に表示
+- アプリを終了しても、通知・Live Activity 側の表示は継続する
+
+### 7-2. ストップウォッチ（StopwatchService）
+
+- 単純な START / STOP / RESET（画面・状態はセッションとは独立）
+- 経過時間を通知（Android: chronometer、iOS: Live Activity）に表示。Android の通知には「タイマーをリセット」ボタン
+
+---
+
+## 8. トレーニング時間の記録
+
+設定の「タイマーでトレーニング時間を記録」（初期オフ）と、分析タブのストップウォッチカードのトグルは**同じ値**。オンのときだけ機能する。
+
+- **開始**: 「トレーニング開始」（ストップウォッチも開始）
+- **終了**: 「トレーニング終了」（ストップウォッチも停止）。終了時刻は押した時刻
+- **RESET**: ストップウォッチをリセットし、**トレーニング時間の記録も中断**（保存しない）
+- **自動終了**: 最後にセットを記録してから設定時間（30分〜3時間、初期 1 時間）が過ぎると終了。**終了時刻は最後の記録の時刻**（クールダウン分などは加えない）。日付をまたいだ場合も自動終了
+  - 通知（トレーニング通知がオンのとき）: 「トレーニングの記録から○時間が経過しました」／「トレーニング時間の記録を終了しました（最後の記録の時刻で終了）」
+  - iOS は通知の時刻にアプリの処理を実行できないため、終了処理は、前面にいる間はアプリ内タイマー、背面から戻ったときは復帰時に行う（記録される時刻は同じ）
+- **記録が 1 件もないまま**終了・自動終了した場合は、時間を記録しない
+- **開始し忘れの確認**: 今日のセットを保存したのに開始されていないとき、「トレーニングを開始しますか？」と確認（1日1回まで。「今後は表示しない」を選べる。設定で再びオンにできる）
+- 記録中はスイッチを切り替えられない
+- 保存先は、その日のセッションの `trainingStartedAt` / `trainingEndedAt`。日別記録一覧で後から修正・消去できる。カレンダーのカードにも分数を表示
+
+---
+
+## 9. サービス層
+
+| サービス | 役割 |
 |---|---|
-| ExercisePickerSheet | 部位別アコーディオン形式の種目選択ボトムシート。カスタム種目の追加機能付き |
-| BannerAdWidget | AdMob バナー広告の表示。失敗時は SizedBox.shrink() |
-| DurationPickerSheet | 休憩タイマーの秒数選択ボトムシート |
+| SessionManager | 進行中セッションの管理、記録の読み書きの窓口（ChangeNotifier）。全記録のキャッシュ、種目名・部位の一括書き換え、トレーニング時間の更新 |
+| RestTimerService | 種目別の休憩タイマー |
+| StopwatchService | ストップウォッチ |
+| TrainingTimeService | トレーニング時間の記録状態（開始・最終記録・自動終了）。SharedPreferences に保存し、起動時に復元 |
+| NotificationService | 休憩終了・常駐・トレーニング自動終了の通知、通知ボタンの処理 |
+| LiveActivityService | iOS Live Activities（休憩タイマー・ストップウォッチ） |
+| NavigationService | ルート Navigator のキー、メインタブの選択状態、フッターの表示状態 |
+| AuthService | Firebase Auth のラッパー（匿名 → 本登録へのリンク） |
+| SyncService | ログイン時の双方向同期（§10） |
+| CloudDataService | 匿名統計（種目名・体重比）の送信（オプトイン時のみ） |
+| AdService / AnalyticsService | 広告管理 / イベント送信 |
+| UserPreferences | 体重・ユーザー名・性別・単位・休憩時間・追加した種目・お気に入り・並び順・ルーチン・各種フラグ |
+| AppSettings | テーマ（ライト/ダーク）・文字サイズ |
 
 ---
 
-## 7. サービス層
-
-### 7-1. SessionManager
-
-進行中のセッションをメモリ上で管理するシングルトン。画面遷移をまたいで状態を保持する。
-
-### 7-2. AuthService
-
-Firebase Auth のラッパー。匿名→メール/Google/Apple へのアカウント昇格（リンク）機能付き。
-
-### 7-3. SyncService
-
-ログイン時のデータ同期。
-- ローカル空 + クラウドにデータあり → クラウドからダウンロード
-- ローカルにデータあり → クラウドへアップロード
-
-### 7-4. CloudDataService
-
-匿名統計データ（種目名・体重比）の Firestore への書き込み。オプトイン時のみ動作。
-
-### 7-5. AdService
-
-AdMob のバナー・リワード広告管理シングルトン。
-
-### 7-6. AnalyticsService
-
-Firebase Analytics のイベント送信ラッパー。
-
-### 7-7. UserPreferences
-
-SharedPreferences のラッパー。体重・ユーザー名・性別・休憩時間・統計共有フラグ・プライバシー同意フラグ・カスタム種目を管理。
-
-### 7-8. StopwatchService
-
-ワークアウト全体のストップウォッチ。
-
----
-
-## 8. リポジトリ層
-
-オフラインファースト設計。通常時は SQLite のみ使用し、ログイン後は Firestore にも同期する。
+## 10. リポジトリ層とクラウド同期
 
 ```
 WorkoutRepository（インターフェース）
-├── SqliteWorkoutRepository   ← 未ログイン時
+├── SqliteWorkoutRepository    ← 未ログイン時
 ├── FirestoreWorkoutRepository ← Firestore 単体
-└── HybridWorkoutRepository   ← ログイン後（読み: SQLite / 書き: 両方）
+└── HybridWorkoutRepository    ← ログイン後（読み: SQLite / 書き: 両方）
 ```
 
 **Firestore パス**: `users/{uid}/sessions/{sessionId}`
 
----
-
-## 9. 強度基準（StrengthTier）
-
-ExRx 基準の体重倍率をもとに5段階評価。
-
-| ティア | 表示 | カラー |
-|---|---|---|
-| beginner | 初心者 | グレー #6B7280 |
-| novice | 初級 | ブルー（kSecondary） |
-| intermediate | 中級 | グリーン（kTertiary） |
-| advanced | 上級 | オレンジ（kPrimary） |
-| elite | エリート | ゴールド #FFD700 |
-
-基準値は10種目分を個別定義し、未定義種目は部位別フォールバック値を使用。
+### ログイン時の同期（双方向マージ）
+- 端末にしかない記録 → クラウドへアップロード
+- クラウドにしかない記録 → 端末へダウンロード
+- 両方にある記録（同じ ID）→ **更新日時が新しい方**を両方に反映（更新日時のない古いデータ同士は端末側を優先）
+- **削除は同期しない**（他端末で削除した記録が、別端末から再アップロードされる場合がある）
 
 ---
 
-## 10. デザインシステム
+## 11. 強度基準（StrengthTier）
 
-### カラーパレット（ダークテーマ固定）
+ExRx 基準の体重倍率をもとに 5 段階評価。
 
-| トークン | 値 | 用途 |
-|---|---|---|
-| kBackground | #131313 | 背景 |
-| kSurface | #131313 | サーフェス |
-| kSurfaceContainerLow | #1C1B1B | カード |
-| kSurfaceContainerHigh | #2A2A2A | 入力フィールド |
-| kPrimary | #FF6B00 | アクション・強調 |
-| kSecondary | #ADC6FF | ブルー |
-| kTertiary | #4DE082 | グリーン（成功） |
-| kOnSurface | #E5E2E1 | 主要テキスト |
-| kOnSurfaceVariant | #E2BFB0 | 補助テキスト（ウォーム） |
+| ティア | 表示 |
+|---|---|
+| beginner | 初心者 |
+| novice | 初級 |
+| intermediate | 中級 |
+| advanced | 上級 |
+| elite | エリート |
 
-### フォント
-- **本文・UI**: Inter（Google Fonts）
-- **ラベル・タグ**: JetBrains Mono（Google Fonts）
+体重比 = 1RM ÷ その記録の体重。基準値は主要種目を個別定義し、未定義種目は部位別のフォールバック値を使用。
 
 ---
 
-## 11. Firebase 構成
+## 12. 体重の扱い
+
+- 各記録（セッション）が `bodyWeightKg` を持つ。体重比の計算はその記録の体重を使う
+- 今日の記録の体重を更新すると、設定の体重（プロフィール）も更新する。過去の記録の体重は、その記録の体重比の計算にだけ使う
+
+---
+
+## 13. デザインシステム
+
+- **テーマ**: ダーク（既定）とライト。設定で切替
+- **主要色**: kPrimary（オレンジ #FF6B00）が強調・アクション、kSecondary（ブルー）、kTertiary（グリーン）
+- **フォント**: 本文・UI は Inter、ラベル・数値は JetBrains Mono。漢字は日本語ロケールにより日本語の字形で表示
+
+---
+
+## 14. Firebase 構成
 
 | サービス | 用途 |
 |---|---|
-| Authentication | メール / Google / Apple サインイン、匿名認証 |
-| Firestore | ワークアウトセッションのクラウド保存、匿名統計データ収集 |
-| Analytics | 画面遷移・機能利用イベントの収集 |
-| Crashlytics | クラッシュレポート |
+| Authentication | メール / Google / Apple、匿名認証 |
+| Firestore | ワークアウトセッションのクラウド保存、匿名統計、共有カスタム種目、バグ報告 |
+| Analytics / Crashlytics | 画面遷移・機能利用イベント / クラッシュレポート |
 
 ### Firestore セキュリティルール方針
 - `users/{uid}/sessions/` は本人のみ読み書き可
-- `exercise_ratios/` は認証済みユーザーが読み書き可（更新・削除は不可）
+- `exercise_ratios/` は認証済みユーザーが作成・読み取り可（更新・削除は不可）
+- `bug_reports/` は誰でも作成可（読み取り・更新・削除は不可）
+- `exercises/`（共有カスタム種目）は認証済みユーザーが作成・読み取り可（更新・削除は不可）
 - それ以外はすべて拒否
+
+ルールの全文は `release/ios.md` を参照。
 
 ---
 
-## 12. 広告構成
+## 15. 広告構成
 
 | 広告タイプ | 配置 | 備考 |
 |---|---|---|
-| バナー広告 | 全画面の下部 | BannerAdWidget |
-| リワード広告 | 分析タブ下部「広告を見て応援する」ボタン | リワードは付与しない |
+| バナー広告 | メイン画面の下部（フッターの上） | BannerAdWidget。失敗時は非表示 |
+| リワード広告 | 分析タブ下部「広告を見て応援する」 | リワードは付与しない |
 
 ---
 
-## 13. 既知の制約・TODO
+## 16. パフォーマンス上の工夫
+
+- カレンダー: 日付別インデックス・連続日数・最近の種目名をキャッシュ。全記録は `SessionManager` がキャッシュし、記録の変更・削除まで再取得しない
+- グラフ: 自作の CustomPainter で、表示範囲の点だけを描画
+- フォント: GoogleFonts のスタイルをキャッシュ（`AppFonts`）
+- 休憩タイマー・ストップウォッチ: ValueNotifier で更新範囲を局所化
+
+---
+
+## 17. 既知の制約・TODO
 
 | 項目 | 内容 |
 |---|---|
-| AdMob 本番 ID | テスト ID のまま。リリース前に AdMob Console で取得して差し替えが必要 |
-| Apple Sign-In（Android） | Service ID の設定が未完了 |
-| ルーティンの永続化 | 現状は揮発性（アプリ再起動で消える）。SharedPreferences への保存が必要 |
-| ヒストグラム機能 | CloudDataService で収集中だが、表示 UI は未実装 |
+| ヒストグラム | 強度分布の表示 UI は未実装（データは収集中） |
 | 女性向け強度基準 | 現状は男性基準のみ |
-| ダークテーマ固定 | ライトテーマへの切り替えは未対応 |
+| 削除の同期 | 記録の削除は端末間で同期されない |
+| 追加した種目の同期 | 端末内保存。別端末へは、記録に出る名前から補う方式のみ |
+| iOS の自動終了 | 通知時刻にアプリの処理は動かず、復帰時に確定する。それまでロック画面のタイマーは残る |
+| 広告 ID | 本番 ID への差し替え・確認はリリース前に実施 |
 
 ---
 
-## 14. ディレクトリ構成
+## 18. ディレクトリ構成
 
 ```
 lib/
-├── main.dart                      # エントリーポイント・AuthGate・ナビゲーション
-├── theme.dart                     # デザインシステム（カラー・テーマ）
+├── main.dart                      # エントリーポイント・AuthGate・タブ・共通フッター
+├── theme.dart                     # デザインシステム
 ├── firebase_options.dart          # Firebase 設定（自動生成）
 │
-├── models/
-│   └── workout.dart               # WorkoutSession / Exercise / WorkoutSet / MuscleGroup
-│
+├── models/workout.dart            # セッション・種目・セット・部位・標準種目一覧
 ├── data/
-│   ├── database_helper.dart       # SQLite 初期化
-│   └── strength_standards.dart    # ExRx 基準値・StrengthTier
-│
-├── repositories/
-│   ├── workout_repository.dart    # インターフェース
-│   ├── sqlite_workout_repository.dart
-│   ├── firestore_workout_repository.dart
-│   └── hybrid_workout_repository.dart
-│
-├── services/
-│   ├── session_manager.dart       # 進行中セッション管理
-│   ├── auth_service.dart          # Firebase Auth ラッパー
-│   ├── sync_service.dart          # ログイン時データ同期
-│   ├── cloud_data_service.dart    # 匿名統計データ送信
-│   ├── ad_service.dart            # AdMob 管理
-│   ├── analytics_service.dart     # Firebase Analytics
-│   ├── firebase_init.dart         # Firebase 初期化
-│   ├── user_preferences.dart      # SharedPreferences ラッパー
-│   └── stopwatch_service.dart     # ストップウォッチ
-│
+│   ├── database_helper.dart       # SQLite 初期化・移行（v4）
+│   └── strength_standards.dart    # 強度基準・ティア
+├── repositories/                  # workout_repository / sqlite / firestore / hybrid
+├── services/                      # §9 のサービス群
 ├── screens/
 │   ├── analysis_screen.dart       # [Tab 0] 分析
 │   ├── history_screen.dart        # [Tab 1] カレンダー
-│   ├── routines_screen.dart       # [Tab 2] ルーティン
-│   ├── profile_screen.dart        # [Tab 3] プロフィール
-│   ├── daily_detail_screen.dart   # セッション詳細・編集
-│   ├── exercise_record_screen.dart # 新規記録
-│   ├── exercise_analysis_screen.dart # 種目別分析
-│   ├── routine_detail_screen.dart # ルーティン詳細
-│   ├── auth_screen.dart           # ログイン・新規登録
-│   └── privacy_consent_screen.dart # 初回プライバシー同意
-│
+│   ├── routines_screen.dart       # [Tab 2] ルーチン
+│   ├── profile_screen.dart        # [Tab 3] 設定
+│   ├── daily_detail_screen.dart   # 日別記録一覧
+│   ├── exercise_record_screen.dart    # 種目の記録・編集
+│   ├── exercise_analysis_screen.dart  # 種目別分析
+│   ├── routine_detail_screen.dart
+│   ├── auth_screen.dart
+│   ├── privacy_consent_screen.dart
+│   └── tutorial_screen.dart
 ├── widgets/
-│   ├── exercise_picker_sheet.dart # 種目選択ボトムシート
-│   ├── banner_ad_widget.dart      # バナー広告
-│   └── duration_picker_sheet.dart # 秒数選択
-│
-└── utils/
-    └── time_format.dart           # 時間フォーマットユーティリティ
+│   ├── main_bottom_bar.dart       # 共通フッター
+│   ├── exercise_picker_sheet.dart # 種目選択シート
+│   ├── rest_timer_overlay.dart    # 休憩タイマーのオーバーレイ
+│   ├── trend_chart_card.dart      # 推移グラフ
+│   ├── banner_ad_widget.dart
+│   └── duration_picker_sheet.dart
+└── utils/                         # time_format / app_fonts
+
+ios/RepRankWidget/                 # Live Activities（Widget Extension）
 ```
