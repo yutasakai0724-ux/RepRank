@@ -5,6 +5,7 @@ import '../models/workout.dart';
 import '../services/session_manager.dart';
 import '../utils/time_format.dart';
 import 'daily_detail_screen.dart';
+import '../widgets/exercise_picker_sheet.dart';
 import 'exercise_record_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -484,13 +485,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
         .toList();
 
     if (daySessions.isEmpty) {
+      // 記録がない日: 目立たない「この日の記録を追加」ボタンを出す
       return [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: Center(
-            child: Text(
-              'この日のトレーニング記録はありません',
-              style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+            child: TextButton.icon(
+              onPressed: () => _addRecordToDay(day),
+              icon: Icon(Icons.add, size: 16, color: context.cTextSub),
+              label: Text(
+                'この日の記録を追加',
+                style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+              ),
             ),
           ),
         ),
@@ -498,6 +504,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     return [_dayCard(day, daySessions)];
+  }
+
+  /// 記録のない日に種目を選んで記録を追加する（セッションは入力・保存時に作成される）。
+  void _addRecordToDay(DateTime day) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => ExercisePickerSheet(
+        onSelected: (exercise) async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ExerciseRecordScreen(exercise: exercise, targetDate: day),
+            ),
+          );
+          _loadSessions();
+        },
+      ),
+    );
   }
 
   /// カード長押し: その日の記録をまとめて削除する（確認ダイアログあり）。
@@ -553,13 +580,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   /// カード全体のタップで日別記録一覧画面へ、種目行のタップでその種目の記録画面へ遷移する。
   Widget _dayCard(DateTime day, List<WorkoutSession> sessions) {
     final volume = sessions.fold(0.0, (s, e) => s + e.totalVolume);
-    final finished = sessions.where((s) => s.finishedAt != null);
-    final duration = finished.isEmpty
+    // トレーニング時間: 記録のある記録（セッション）の合計
+    final durations =
+        sessions.map((s) => s.trainingDuration).whereType<Duration>();
+    final duration = durations.isEmpty
         ? null
-        : finished.fold(
-            Duration.zero,
-            (d, s) => d + s.finishedAt!.difference(s.startedAt),
-          );
+        : durations.fold(Duration.zero, (a, b) => a + b);
     final earliest = sessions
         .map((s) => s.startedAt)
         .reduce((a, b) => a.isBefore(b) ? a : b);

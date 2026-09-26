@@ -66,6 +66,12 @@ class SqliteWorkoutRepository implements WorkoutRepository {
           .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
           .toList(),
       bodyWeightKg: (row['body_weight_kg'] as num?)?.toDouble(),
+      trainingStartedAt: row['training_started_at'] != null
+          ? DateTime.parse(row['training_started_at'] as String)
+          : null,
+      trainingEndedAt: row['training_ended_at'] != null
+          ? DateTime.parse(row['training_ended_at'] as String)
+          : null,
       updatedAt: row['updated_at'] != null
           ? DateTime.parse(row['updated_at'] as String)
           : null,
@@ -82,6 +88,8 @@ class SqliteWorkoutRepository implements WorkoutRepository {
     'exercises_json':
         jsonEncode(s.exercises.map((e) => e.toJson()).toList()),
     'body_weight_kg': s.bodyWeightKg,
+    'training_started_at': s.trainingStartedAt?.toIso8601String(),
+    'training_ended_at': s.trainingEndedAt?.toIso8601String(),
     'updated_at': s.updatedAt?.toIso8601String(),
   };
 }

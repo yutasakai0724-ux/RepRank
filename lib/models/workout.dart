@@ -115,6 +115,11 @@ class WorkoutSession {
   List<Exercise> exercises;
   double? bodyWeightKg;
 
+  /// トレーニング時間（ストップウォッチの「トレーニング開始／終了」で記録、または手動編集）。
+  /// startedAt / finishedAt（セッション作成・終了の内部的な時刻）とは別の値。
+  DateTime? trainingStartedAt;
+  DateTime? trainingEndedAt;
+
   /// 最終更新日時。ログイン時のクラウドとの同期で、新しい方を採用するために使う。
   DateTime? updatedAt;
 
@@ -127,6 +132,8 @@ class WorkoutSession {
     this.finishedAt,
     List<Exercise>? exercises,
     this.bodyWeightKg,
+    this.trainingStartedAt,
+    this.trainingEndedAt,
     this.updatedAt,
   }) : id = id ?? _uuid.v4(),
        exercises = exercises ?? [];
@@ -135,6 +142,13 @@ class WorkoutSession {
   Duration get duration {
     final end = finishedAt ?? DateTime.now();
     return end.difference(startedAt);
+  }
+
+  /// 記録されたトレーニング時間。開始・終了の両方があるときだけ値を返す。
+  Duration? get trainingDuration {
+    final s = trainingStartedAt, e = trainingEndedAt;
+    if (s == null || e == null || e.isBefore(s)) return null;
+    return e.difference(s);
   }
 
   /// トータルボリューム (kg)
@@ -152,6 +166,8 @@ class WorkoutSession {
     'finishedAt': finishedAt?.toIso8601String(),
     'exercises': exercises.map((e) => e.toJson()).toList(),
     'bodyWeightKg': bodyWeightKg,
+    'trainingStartedAt': trainingStartedAt?.toIso8601String(),
+    'trainingEndedAt': trainingEndedAt?.toIso8601String(),
     'updatedAt': updatedAt?.toIso8601String(),
   };
 
@@ -168,6 +184,12 @@ class WorkoutSession {
         .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
         .toList(),
     bodyWeightKg: (j['bodyWeightKg'] as num?)?.toDouble(),
+    trainingStartedAt: j['trainingStartedAt'] != null
+        ? DateTime.parse(j['trainingStartedAt'] as String)
+        : null,
+    trainingEndedAt: j['trainingEndedAt'] != null
+        ? DateTime.parse(j['trainingEndedAt'] as String)
+        : null,
     updatedAt: j['updatedAt'] != null
         ? DateTime.parse(j['updatedAt'] as String)
         : null,

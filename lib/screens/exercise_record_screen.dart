@@ -7,6 +7,8 @@ import '../services/analytics_service.dart';
 import '../services/cloud_data_service.dart';
 import '../services/rest_timer_service.dart';
 import '../services/session_manager.dart';
+import '../services/stopwatch_service.dart';
+import '../services/training_time_service.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
 import '../widgets/duration_picker_sheet.dart';
@@ -18,10 +20,15 @@ class ExerciseRecordScreen extends StatefulWidget {
   /// 保存先セッションID。null の場合はアクティブセッション（今日）に保存。
   final String? sessionId;
 
+  /// sessionId が無く、今日以外の日付へ新規に記録する場合の対象日。
+  /// セッションは最初に保存されるとき（データが入力されたとき）に作成する。
+  final DateTime? targetDate;
+
   const ExerciseRecordScreen({
     super.key,
     required this.exercise,
     this.sessionId,
+    this.targetDate,
   });
 
   @override
@@ -92,7 +99,10 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
 
     // 新規追加時（sessionId 未指定）はアクティブセッションを作成
     // 種目は実際にデータが入力された時のみ保存する（選択だけで記録にならないよう）
-    if (widget.sessionId == null) {
+    if (widget.sessionId == null && _target != null) {
+      _sessionDate = _target!;
+      _loadBodyWeight();
+    } else if (widget.sessionId == null) {
       _initSession();
     } else {
       _resolvedSessionId = widget.sessionId;
@@ -323,7 +333,117 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
     _saveDebounce = Timer(const Duration(milliseconds: 600), () async {
       await _commitSaveAsync();
       if (mounted) setState(() => _saveStatus = 'saved');
+      _maybePromptTrainingStart();
     });
+  }
+
+  /// 今日を指定された場合は通常の新規記録（アクティブセッション）として扱う。
+  DateTime? get _target {
+    final d = widget.targetDate;
+    if (d == null) return null;
+    final n = DateTime.now();
+    return (d.year == n.year && d.month == n.month && d.day == n.day) ? null : d;
+  }
+
+  /// 開始し忘れの確認を出した日（アプリ起動中は1日1回まで）
+  static int? _promptedDayKey;
+
+  /// 今日の記録を保存した時点で、トレーニング時間の記録がオンなのに開始されていなければ、
+  /// 「トレーニングを開始しますか？」と確認する（「今後は表示しない」を選べる）。
+  Future<void> _maybePromptTrainingStart() async {
+    final svc = TrainingTimeService.instance;
+    if (!mounted ||
+        !svc.enabled ||
+        svc.isRunning ||
+        svc.suppressStartPrompt ||
+        _isPast) {
+      return;
+    }
+    // 実際にセットが記録されているときだけ確認する
+    if (!_sets.any((s) => s.reps > 0 || s.weight > 0)) return;
+    final n = DateTime.now();
+    final key = n.year * 10000 + n.month * 100 + n.day;
+    if (_promptedDayKey == key) return;
+    _promptedDayKey = key;
+
+    var dontShowAgain = false;
+    final start = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          backgroundColor: context.cCardLow,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('トレーニングを開始しますか？',
+              style: AppFonts.inter(
+                  fontWeight: FontWeight.w700, color: context.cText)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'トレーニング時間の記録がまだ開始されていません。今から開始して、時間を記録しますか？',
+                style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () => setLocal(() => dontShowAgain = !dontShowAgain),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: dontShowAgain,
+                      activeColor: kPrimary,
+                      onChanged: (v) =>
+                          setLocal(() => dontShowAgain = v ?? false),
+                    ),
+                    Expanded(
+                      child: Text('今後は表示しない',
+                          style: AppFonts.inter(
+                              fontSize: 13, color: context.cText)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('あとで',
+                  style: AppFonts.inter(color: context.cTextSub)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('開始する',
+                  style: AppFonts.inter(
+                      color: kPrimary, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (dontShowAgain) await svc.setSuppressStartPrompt(true);
+    if (start == true) {
+      // 今すぐ記録した直後なので「記録あり」として開始する
+      StopwatchService.instance.start();
+      await svc.start(hasRecordNow: true);
+    }
+  }
+
+  Future<String>? _targetSessionFuture;
+
+  /// 対象日のセッションIDを返す。その日に既にセッションがあればそれを使い、
+  /// 無ければ作成する（保存が重なっても1つだけ作る）。
+  Future<String> _ensureTargetSession() {
+    return _targetSessionFuture ??= () async {
+      final date = _target!;
+      final existing = await SessionManager.instance.getSessionsForDate(date);
+      final id = existing.isNotEmpty
+          ? existing.first.id
+          : (await SessionManager.instance.createSessionForDate(date)).id;
+      _resolvedSessionId = id;
+      return id;
+    }();
   }
 
   Future<void> _commitSaveAsync() async {
@@ -348,6 +468,9 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
         widget.sessionId!,
         exercise,
       );
+    } else if (_target != null) {
+      final id = await _ensureTargetSession();
+      await SessionManager.instance.saveExerciseToExistingSession(id, exercise);
     } else {
       await SessionManager.instance.saveExercise(exercise);
     }
@@ -492,15 +615,24 @@ class _ExerciseRecordScreenState extends State<ExerciseRecordScreen> {
           body: Column(
             children: [
               if (_isPast) _buildPastBanner(),
-              _buildStatsCard(),
-              _buildOverallMemo(),
-              _buildRestTimer(),
-              _buildColumnHeader(),
+              // 休憩タイマーだけを上部に固定。過去の記録・メモはセットと一緒にスクロールする。
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _buildRestTimer(),
+              ),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _sets.length,
-                  itemBuilder: (_, i) => _buildSetRow(i),
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _buildStatsCard(),
+                    _buildOverallMemo(),
+                    _buildColumnHeader(),
+                    for (int i = 0; i < _sets.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildSetRow(i),
+                      ),
+                  ],
                 ),
               ),
               _buildAddSetOnlyBar(),

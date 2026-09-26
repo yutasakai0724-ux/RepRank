@@ -9,6 +9,7 @@ import '../data/strength_standards.dart';
 import '../services/ad_service.dart';
 import '../services/session_manager.dart';
 import '../services/stopwatch_service.dart';
+import '../services/training_time_service.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
 import 'exercise_analysis_screen.dart';
@@ -423,6 +424,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               ),
             ],
           ),
+          _buildTrainingToggle(),
           const SizedBox(height: 18),
           // 経過時間（64px 大画面表示）
           FittedBox(
@@ -451,56 +453,146 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             ),
           ),
           const SizedBox(height: 20),
-          // 操作ボタン: START / STOP / RESET
-          Row(
-            children: [
-              Expanded(
-                child: _actionButton(
-                  icon: Icons.play_arrow,
-                  label: 'START',
-                  bgColor: isRunning ? context.cCardHigh : kPrimary,
-                  fgColor: isRunning ? context.cTextSub : Colors.white,
-                  disabled: isRunning,
-                  onTap: () {
-                    StopwatchService.instance.start();
-                    _updateElapsed();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _actionButton(
-                  icon: Icons.pause,
-                  label: 'STOP',
-                  bgColor: isRunning ? context.cCardHigh : context.cCardHigh,
-                  fgColor: isRunning ? kPrimaryLight : context.cTextSub,
-                  borderColor: isRunning
-                      ? kPrimaryLight.withValues(alpha: 0.5)
-                      : null,
-                  disabled: !isRunning,
-                  onTap: () {
-                    StopwatchService.instance.stop();
-                    _updateElapsed();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _actionButton(
-                  icon: Icons.refresh,
-                  label: 'RESET',
-                  bgColor: context.cCardHigh,
-                  fgColor: context.cTextSub,
-                  onTap: () {
-                    StopwatchService.instance.reset();
-                    _updateElapsed();
-                  },
-                ),
-              ),
-            ],
+          // 操作ボタン
+          ListenableBuilder(
+            listenable: TrainingTimeService.instance,
+            builder: (context, _) => _buildStopwatchButtons(isRunning),
           ),
         ],
       ),
+    );
+  }
+
+  /// ヘッダー下: 「タイマーでトレーニング時間を記録」トグルと記録中の表示。
+  /// 設定画面のスイッチと同じ値（オンのときだけ開始・終了ボタンを表示）。
+  Widget _buildTrainingToggle() {
+    return ListenableBuilder(
+      listenable: TrainingTimeService.instance,
+      builder: (context, _) {
+        final svc = TrainingTimeService.instance;
+        final start = svc.startAt;
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'タイマーでトレーニング時間を記録',
+                    style: AppFonts.inter(
+                        fontSize: 12, color: context.cTextSub),
+                  ),
+                  const SizedBox(width: 4),
+                  Switch(
+                    value: svc.enabled,
+                    onChanged: svc.isRunning
+                        ? null // 記録中は切り替えない
+                        : (v) => svc.setEnabled(v),
+                    activeColor: kPrimary,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ],
+              ),
+              if (svc.enabled && start != null)
+                Text(
+                  'トレーニング記録中（開始 ${formatHM(start)}）',
+                  style: AppFonts.jetBrainsMono(
+                      fontSize: 10, color: kPrimaryLight),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStopwatchButtons(bool isRunning) {
+    final training = TrainingTimeService.instance;
+
+    Widget stopBtn() => _actionButton(
+      icon: Icons.pause,
+      label: 'STOP',
+      bgColor: context.cCardHigh,
+      fgColor: isRunning ? kPrimaryLight : context.cTextSub,
+      borderColor: isRunning ? kPrimaryLight.withValues(alpha: 0.5) : null,
+      disabled: !isRunning,
+      onTap: () {
+        StopwatchService.instance.stop();
+        _updateElapsed();
+      },
+    );
+    Widget resetBtn({required bool alsoTraining}) => _actionButton(
+      icon: Icons.refresh,
+      label: alsoTraining ? 'RESET（トレーニング時間の記録も中断）' : 'RESET',
+      bgColor: context.cCardHigh,
+      fgColor: context.cTextSub,
+      onTap: () async {
+        StopwatchService.instance.reset();
+        if (alsoTraining) await training.cancel(); // 中断: 時間は記録しない
+        _updateElapsed();
+      },
+    );
+
+    if (training.enabled) {
+      // 誤操作を防ぐため、4つのボタンを縦に幅いっぱいで並べる
+      final running = training.isRunning;
+      return Column(
+        children: [
+          _actionButton(
+            icon: Icons.play_arrow,
+            label: 'トレーニング開始',
+            bgColor: running ? context.cCardHigh : kPrimary,
+            fgColor: running ? context.cTextSub : Colors.white,
+            disabled: running,
+            onTap: () async {
+              StopwatchService.instance.start();
+              await training.start();
+              _updateElapsed();
+            },
+          ),
+          const SizedBox(height: 8),
+          _actionButton(
+            icon: Icons.flag,
+            label: 'トレーニング終了',
+            bgColor: context.cCardHigh,
+            fgColor: running ? kPrimaryLight : context.cTextSub,
+            borderColor:
+                running ? kPrimaryLight.withValues(alpha: 0.5) : null,
+            disabled: !running,
+            onTap: () async {
+              await training.endManually();
+              _updateElapsed();
+            },
+          ),
+          const SizedBox(height: 8),
+          stopBtn(),
+          const SizedBox(height: 8),
+          resetBtn(alsoTraining: true),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: _actionButton(
+            icon: Icons.play_arrow,
+            label: 'START',
+            bgColor: isRunning ? context.cCardHigh : kPrimary,
+            fgColor: isRunning ? context.cTextSub : Colors.white,
+            disabled: isRunning,
+            onTap: () {
+              StopwatchService.instance.start();
+              _updateElapsed();
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: stopBtn()),
+        const SizedBox(width: 8),
+        Expanded(child: resetBtn(alsoTraining: false)),
+      ],
     );
   }
 

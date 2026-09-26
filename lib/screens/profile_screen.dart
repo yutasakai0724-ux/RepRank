@@ -15,6 +15,7 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/user_preferences.dart';
 import '../services/session_manager.dart';
+import '../services/training_time_service.dart';
 import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -255,6 +256,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildNotificationCard(),
                 const SizedBox(height: 24),
 
+                // ── トレーニング時間 ──
+                _sectionHeader('トレーニング時間'),
+                const SizedBox(height: 12),
+                _buildTrainingTimeCard(),
+                const SizedBox(height: 24),
+
                 // ── 表示設定 ──
                 _sectionHeader('表示設定'),
                 const SizedBox(height: 12),
@@ -275,6 +282,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
     );
+  }
+
+  // ── トレーニング時間カード ────────────────────────────────────
+  Widget _buildTrainingTimeCard() {
+    final svc = TrainingTimeService.instance;
+    return ListenableBuilder(
+      listenable: svc,
+      builder: (context, _) => _buildCard(
+        children: [
+          _switchRow(
+            label: 'タイマーでトレーニング時間を記録',
+            sub: svc.isRunning
+                ? '記録中は変更できません（分析タブのストップウォッチで終了してください）'
+                : '分析タブのストップウォッチカードのスイッチと連動します',
+            value: svc.enabled,
+            onChanged: svc.isRunning ? (_) {} : (v) => svc.setEnabled(v),
+          ),
+          if (svc.enabled) ...[
+            Divider(height: 1, color: context.cCardHigh),
+            InkWell(
+              onTap: _pickAutoEndMinutes,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('自動終了までの時間',
+                              style: AppFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.cText)),
+                          const SizedBox(height: 2),
+                          Text('最後の記録からこの時間が過ぎると、最後の記録の時刻で終了します',
+                              style: AppFonts.inter(
+                                  fontSize: 11, color: context.cTextSub)),
+                        ],
+                      ),
+                    ),
+                    Text(TrainingTimeService.labelFor(svc.autoEndMinutes),
+                        style: AppFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: kPrimary)),
+                    Icon(Icons.chevron_right,
+                        size: 20, color: context.cTextSub),
+                  ],
+                ),
+              ),
+            ),
+            Divider(height: 1, color: context.cCardHigh),
+            _switchRow(
+              label: '開始し忘れの確認',
+              sub: '記録したのにトレーニング開始が押されていないとき、開始するか確認します',
+              value: !svc.suppressStartPrompt,
+              onChanged: (v) => svc.setSuppressStartPrompt(!v),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAutoEndMinutes() async {
+    final svc = TrainingTimeService.instance;
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: context.cCardLow,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final m in TrainingTimeService.autoEndChoices)
+              ListTile(
+                title: Text(TrainingTimeService.labelFor(m),
+                    style: AppFonts.inter(color: context.cText)),
+                trailing: m == svc.autoEndMinutes
+                    ? const Icon(Icons.check, color: kPrimary)
+                    : null,
+                onTap: () => Navigator.pop(ctx, m),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) await svc.setAutoEndMinutes(picked);
   }
 
   // ── 通知設定カード ────────────────────────────────────────────

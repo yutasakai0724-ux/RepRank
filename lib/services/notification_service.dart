@@ -37,6 +37,7 @@ class NotificationService {
   bool _initialized = false;
 
   static const _stopwatchOngoingId = 44;
+  static const _trainingAutoEndId = 45;
 
   // ── 通知タップ時の画面遷移 ────────────────────────────────────
   // payload には種目タイマーのキー（種目名）を格納する。
@@ -210,6 +211,51 @@ class NotificationService {
     } catch (e) {
       debugPrint('[NotificationService] schedule failed: $e');
     }
+  }
+
+  // ── トレーニング時間の自動終了通知 ─────────────────────────────
+  // 「最後の記録から一定時間」の時刻に通知する。iOS は通知時刻にアプリの処理を
+  // 実行できないため、実際の終了処理は TrainingTimeService が次回起動時／復帰時に行う。
+
+  Future<void> scheduleTrainingAutoEnd(
+      DateTime when, String title, String body) async {
+    final enabled = await UserPreferences.instance.getRestNotification();
+    if (!enabled || !_initialized) return;
+    await _plugin.cancel(_trainingAutoEndId);
+    final now = DateTime.now();
+    if (!when.isAfter(now)) return;
+    try {
+      await _plugin.zonedSchedule(
+        _trainingAutoEndId,
+        title,
+        body,
+        tz.TZDateTime.now(tz.local).add(when.difference(now)),
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'training_time_channel',
+            'トレーニング時間',
+            channelDescription: 'トレーニング時間の記録を自動終了したときに通知します',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentSound: true,
+            sound: 'default',
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] training auto-end schedule failed: $e');
+    }
+  }
+
+  Future<void> cancelTrainingAutoEnd() async {
+    if (!_initialized) return;
+    await _plugin.cancel(_trainingAutoEndId);
   }
 
   Future<void> cancelRestEnd(String key) async {

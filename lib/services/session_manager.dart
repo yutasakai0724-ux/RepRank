@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/workout.dart';
 import '../repositories/workout_repository.dart';
+import 'training_time_service.dart';
 import 'user_preferences.dart';
 
 /// アクティブなワークアウトセッションをメモリ上で管理し、
@@ -71,6 +72,7 @@ class SessionManager extends ChangeNotifier {
     }
     await _save(session);
     notifyListeners();
+    TrainingTimeService.instance.onRecordSaved(session.date);
   }
 
   /// 既存セッションの種目を更新して DB に保存（編集モード用）
@@ -93,6 +95,24 @@ class SessionManager extends ChangeNotifier {
     } else {
       session.exercises.add(exercise);
     }
+    await _save(session);
+    notifyListeners();
+    TrainingTimeService.instance.onRecordSaved(session.date);
+  }
+
+  /// セッションのトレーニング時間（開始・終了）を更新する。null を渡すと消去。
+  Future<void> updateTrainingTime(
+      String sessionId, DateTime? start, DateTime? end) async {
+    WorkoutSession? session;
+    if (_active?.id == sessionId) {
+      session = _active;
+    } else {
+      final sessions = await _repo.getAllSessions();
+      session = sessions.where((s) => s.id == sessionId).firstOrNull;
+    }
+    if (session == null) return;
+    session.trainingStartedAt = start;
+    session.trainingEndedAt = end;
     await _save(session);
     notifyListeners();
   }

@@ -18,6 +18,7 @@ import 'services/ad_service.dart';
 import 'services/auth_service.dart';
 import 'services/sync_service.dart';
 import 'services/session_manager.dart';
+import 'services/training_time_service.dart';
 import 'services/user_preferences.dart';
 import 'screens/analysis_screen.dart';
 import 'screens/privacy_consent_screen.dart';
@@ -55,6 +56,9 @@ void main() async {
     _switchToHybrid(user.uid);
   }
 
+  // トレーニング時間の記録状態を復元（放置による自動終了の判定も行う）
+  await TrainingTimeService.instance.init();
+
   runApp(const MyApp());
 }
 
@@ -80,16 +84,26 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     AppSettings.instance.addListener(_onSettingsChanged);
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 前面に戻ったとき、放置されたトレーニング時間の記録を自動終了する
+    if (state == AppLifecycleState.resumed) {
+      TrainingTimeService.instance.resolveIfExpired();
+    }
   }
 
   @override
   void dispose() {
     AppSettings.instance.removeListener(_onSettingsChanged);
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 

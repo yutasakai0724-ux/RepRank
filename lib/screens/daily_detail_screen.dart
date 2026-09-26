@@ -3,6 +3,7 @@ import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
+import '../services/training_time_service.dart';
 import '../utils/time_format.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import 'exercise_record_screen.dart';
@@ -222,6 +223,162 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
     );
   }
 
+  /// トレーニング時間の行（開始〜終了と時間）。タップで開始・終了時刻を修正できる。
+  /// 記録がなく、設定でトレーニング時間の記録がオフのときは表示しない。
+  Widget _buildTrainingTimeRow(WorkoutSession session) {
+    final has =
+        session.trainingStartedAt != null && session.trainingEndedAt != null;
+    if (!has && !TrainingTimeService.instance.enabled) {
+      return const SizedBox.shrink();
+    }
+    final d = session.trainingDuration;
+    final label = has
+        ? '${formatHM(session.trainingStartedAt!)} 〜 ${formatHM(session.trainingEndedAt!)}'
+            '${d != null ? '（${d.inMinutes}分）' : ''}'
+        : '未記録（タップして追加）';
+    return InkWell(
+      onTap: () => _editTrainingTime(session),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: context.cCardHigh)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.timer_outlined, size: 14, color: kSecondary),
+            const SizedBox(width: 6),
+            Text('トレーニング時間',
+                style: AppFonts.inter(fontSize: 11, color: context.cTextSub)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label,
+                  style: AppFonts.jetBrainsMono(
+                      fontSize: 11,
+                      color: has ? context.cText : context.cTextSub)),
+            ),
+            Icon(Icons.edit_outlined, size: 14, color: context.cTextSub),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 開始・終了時刻の修正ダイアログ。時刻は、この記録の日付上の時刻として保存する。
+  Future<void> _editTrainingTime(WorkoutSession session) async {
+    final day = session.date;
+    DateTime onDay(TimeOfDay t) =>
+        DateTime(day.year, day.month, day.day, t.hour, t.minute);
+    TimeOfDay? start = session.trainingStartedAt == null
+        ? null
+        : TimeOfDay.fromDateTime(session.trainingStartedAt!);
+    TimeOfDay? end = session.trainingEndedAt == null
+        ? null
+        : TimeOfDay.fromDateTime(session.trainingEndedAt!);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> pick(bool isStart) async {
+            final init = (isStart ? start : end) ??
+                const TimeOfDay(hour: 18, minute: 0);
+            final picked =
+                await showTimePicker(context: ctx, initialTime: init);
+            if (picked == null) return;
+            setLocal(() => isStart ? start = picked : end = picked);
+          }
+
+          String fmt(TimeOfDay? t) => t == null
+              ? '--:--'
+              : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+          final invalid = start != null &&
+              end != null &&
+              !onDay(end!).isAfter(onDay(start!));
+          return AlertDialog(
+            backgroundColor: context.cCardLow,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text('トレーニング時間を修正',
+                style: AppFonts.inter(
+                    fontWeight: FontWeight.w700, color: context.cText)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _timeRow('開始', fmt(start), () => pick(true)),
+                const SizedBox(height: 8),
+                _timeRow('終了', fmt(end), () => pick(false)),
+                if (invalid) ...[
+                  const SizedBox(height: 8),
+                  Text('終了は開始より後の時刻にしてください',
+                      style: AppFonts.inter(
+                          fontSize: 12, color: Colors.red.shade400)),
+                ],
+              ],
+            ),
+            actions: [
+              if (session.trainingStartedAt != null ||
+                  session.trainingEndedAt != null)
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'clear'),
+                  child: Text('消去',
+                      style: AppFonts.inter(color: Colors.red.shade400)),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('キャンセル',
+                    style: AppFonts.inter(color: context.cTextSub)),
+              ),
+              TextButton(
+                onPressed: (start == null || end == null || invalid)
+                    ? null
+                    : () => Navigator.pop(ctx, 'save'),
+                child: Text('保存',
+                    style: AppFonts.inter(
+                        color: kPrimary, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (result == 'save' && start != null && end != null) {
+      await SessionManager.instance
+          .updateTrainingTime(session.id, onDay(start!), onDay(end!));
+    } else if (result == 'clear') {
+      await SessionManager.instance.updateTrainingTime(session.id, null, null);
+    } else {
+      return;
+    }
+    _loadSessions();
+  }
+
+  Widget _timeRow(String label, String value, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 48,
+              child: Text(label,
+                  style: AppFonts.inter(fontSize: 13, color: context.cTextSub)),
+            ),
+            Text(value,
+                style: AppFonts.jetBrainsMono(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: context.cText)),
+            const Spacer(),
+            Icon(Icons.access_time, size: 18, color: context.cTextSub),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSessionCard(int idx, WorkoutSession session) {
     final isExpanded = _expandedSessions.contains(idx);
     final totalVolume = session.exercises.fold(
@@ -229,7 +386,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
       (sum, ex) =>
           sum + ex.sets.fold(0.0, (s, set) => s + set.weight * set.reps),
     );
-    final duration = session.finishedAt?.difference(session.startedAt);
+    final duration = session.trainingDuration;
     final startLabel = formatHM(session.startedAt);
 
     return Container(
@@ -353,6 +510,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               ),
             ),
           ),
+          _buildTrainingTimeRow(session),
           // 展開時: 種目リスト
           if (isExpanded) ...[
             Divider(height: 1, color: context.cCardHigh),
@@ -540,17 +698,13 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               ),
             );
           } else {
-            // 過去日付の新規種目 → 指定日付でセッションを作成してから記録
-            final session = await SessionManager.instance.createSessionForDate(
-              widget.date,
-            );
-            if (!context.mounted) return;
+            // 新規種目 → 指定日付に記録（セッションは入力・保存時に作成される）
             await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ExerciseRecordScreen(
                   exercise: exercise,
-                  sessionId: session.id,
+                  targetDate: widget.date,
                 ),
               ),
             );
