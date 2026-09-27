@@ -7,7 +7,7 @@ import 'firebase_init.dart';
 
 /// Firebase Auth の全プロバイダ対応ラッパー。
 ///
-/// 対応: 匿名 / メール / 電話番号 / Google / Apple
+/// 対応: 匿名 / Google / Apple（メールアドレス・パスワードでのログインは廃止）
 class AuthService {
   AuthService._();
   static final AuthService instance = AuthService._();
@@ -40,48 +40,6 @@ class AuthService {
       debugPrint('[Auth] signInAnonymously failed: $e');
       return null;
     }
-  }
-
-  // ── メール/パスワード ──────────────────────────────────────────
-
-  Future<User?> signInWithEmail(String email, String password) async {
-    if (!FirebaseInit.isReady) return null;
-    try {
-      final cred = await _auth!.signInWithEmailAndPassword(
-          email: email, password: password);
-      debugPrint('[Auth] email sign-in: ${cred.user?.uid}');
-      return cred.user;
-    } on FirebaseAuthException catch (e) {
-      debugPrint('[Auth] email sign-in failed: ${e.code}');
-      rethrow;
-    }
-  }
-
-  Future<User?> createWithEmail(String email, String password) async {
-    if (!FirebaseInit.isReady) return null;
-    try {
-      // 匿名ユーザーがいれば昇格（データを引き継ぐ）
-      if (currentUser?.isAnonymous == true) {
-        final credential =
-            EmailAuthProvider.credential(email: email, password: password);
-        final cred =
-            await currentUser!.linkWithCredential(credential);
-        debugPrint('[Auth] anonymous linked to email: ${cred.user?.uid}');
-        return cred.user;
-      }
-      final cred = await _auth!.createUserWithEmailAndPassword(
-          email: email, password: password);
-      debugPrint('[Auth] email register: ${cred.user?.uid}');
-      return cred.user;
-    } on FirebaseAuthException catch (e) {
-      debugPrint('[Auth] email register failed: ${e.code}');
-      rethrow;
-    }
-  }
-
-  Future<void> sendPasswordReset(String email) async {
-    if (!FirebaseInit.isReady) return;
-    await _auth!.sendPasswordResetEmail(email: email);
   }
 
   // ── Google ────────────────────────────────────────────────────
@@ -246,18 +204,12 @@ class AuthService {
 
   static String errorMessage(FirebaseAuthException e) {
     switch (e.code) {
-      case 'user-not-found':
-        return 'メールアドレスが登録されていません';
-      case 'wrong-password':
-        return 'パスワードが正しくありません';
       case 'invalid-credential':
-        return 'メールアドレスまたはパスワードが正しくありません';
-      case 'email-already-in-use':
-        return 'このメールアドレスはすでに使用されています';
-      case 'weak-password':
-        return 'パスワードは6文字以上にしてください';
-      case 'invalid-email':
-        return 'メールアドレスの形式が正しくありません';
+        return '認証に失敗しました。もう一度お試しください';
+      case 'account-exists-with-different-credential':
+        return 'このメールアドレスは別のサインイン方法（Apple / Google）で登録されています。そちらでログインしてください';
+      case 'user-disabled':
+        return 'このアカウントは無効になっています';
       case 'too-many-requests':
         return 'しばらく時間をおいてから再度お試しください';
       case 'credential-already-in-use':

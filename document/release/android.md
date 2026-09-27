@@ -63,11 +63,7 @@
 `android/key.properties` が以下の形式で存在することを確認:
 
 ```
-storePassword=reprank2026
-keyPassword=reprank2026
-keyAlias=reprank
-storeFile=app/reprank-release.jks
-```
+
 
 > `key.properties` と `reprank-release.jks` は `.gitignore` で git 管理対象外。  
 > 紛失するとアップデート不能になるため、必ず安全な場所にバックアップを保管すること。
@@ -269,7 +265,7 @@ cd /Users/bossen/Desktop/kintorekioku/android
 keytool -list -v \
   -keystore /Users/bossen/Desktop/kintorekioku/android/app/reprank-release.jks \
   -alias reprank
-# パスワード: reprank2026
+# パスワードは android/key.properties を参照（リポジトリには含めない）
 ```
 
 ### 9-3. Firebase Console に登録

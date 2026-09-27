@@ -77,7 +77,7 @@ class PrivacyConsentScreen extends StatelessWidget {
                   _h3(context, '2.4 アカウントおよびクラウド同期データ（オプトイン・任意）'),
                   _ul(context, [
                     '送信先: Firebase Authentication / Firebase Firestore',
-                    '対象: アカウント登録（メールアドレス・Google・Apple）を行った場合のみ',
+                    '対象: アカウント登録（Google・Apple）を行った場合のみ',
                     '内容: ワークアウトの記録（種目名・重量・回数・日時）をクラウドにバックアップ',
                     '目的: 機種変更時のデータ引き継ぎ、複数デバイス間での同期',
                     'データはご自身のアカウントにのみ紐づけられ、他のユーザーはアクセスできません',

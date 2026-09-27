@@ -158,7 +158,7 @@ class _TutorialPage1 extends StatelessWidget {
             context,
             icon: Icons.cloud_outlined,
             title: 'バックアップにはアカウント登録が必要',
-            body: 'アカウント登録（Google・Apple・メール）するとトレーニング記録がクラウドに自動バックアップされます。未登録の場合、機種変更や再インストール時にデータが失われます。',
+            body: 'アカウント登録（Google・Apple）するとトレーニング記録がクラウドに自動バックアップされます。未登録の場合、機種変更や再インストール時にデータが失われます。',
           ),
         ],
       ),

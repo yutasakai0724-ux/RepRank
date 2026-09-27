@@ -1,6 +1,6 @@
 # Rep Rank — アプリ仕様書
 
-**バージョン**: 1.2.7（ビルド 14）  
+**バージョン**: 1.2.7（ビルド 15）  
 **最終更新**: 2026-09-27  
 **バンドル ID**: `com.yutasakai.reprank`  
 **対象プラットフォーム**: iOS・Android  
@@ -26,7 +26,7 @@
 | フレームワーク | Flutter（Dart） |
 | ローカル DB | SQLite（sqflite、スキーマ v4） |
 | クラウド DB | Firebase Firestore |
-| 認証 | Firebase Authentication（メール / Google / Apple、匿名） |
+| 認証 | Firebase Authentication（Google / Apple、匿名）。メール・パスワードは廃止 |
 | 分析・クラッシュ | Firebase Analytics / Crashlytics |
 | 広告 | Google AdMob（バナー・リワード） |
 | 通知 | flutter_local_notifications（休憩タイマー・ストップウォッチ・トレーニング時間） |
@@ -185,7 +185,7 @@ App
 ### 5-4. RoutineDetailScreen / AuthScreen / PrivacyConsentScreen / TutorialScreen
 
 - RoutineDetailScreen: 種目リスト、「このルーチンで開始」
-- AuthScreen: Apple / Google / メール＋パスワード、パスワードリセット
+- AuthScreen: Apple / Google でサインイン（初回はそのままアカウント作成）
 - PrivacyConsentScreen: 初回のみ。プライバシーポリシーへの同意
 - TutorialScreen: 初回のみ。プロフィール設定・記録方法の案内
 
@@ -334,7 +334,7 @@ ExRx 基準の体重倍率をもとに 5 段階評価。
 
 | サービス | 用途 |
 |---|---|
-| Authentication | メール / Google / Apple、匿名認証 |
+| Authentication | Google / Apple、匿名認証 |
 | Firestore | ワークアウトセッションのクラウド保存、匿名統計、共有カスタム種目、バグ報告 |
 | Analytics / Crashlytics | 画面遷移・機能利用イベント / クラッシュレポート |
 
