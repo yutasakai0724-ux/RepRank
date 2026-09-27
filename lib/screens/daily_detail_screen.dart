@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
+import '../services/training_time_service.dart';
 import '../utils/time_format.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import 'exercise_record_screen.dart';
@@ -29,8 +30,9 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
   }
 
   Future<void> _loadSessions() async {
-    final sessions =
-        await SessionManager.instance.getSessionsForDate(widget.date);
+    final sessions = await SessionManager.instance.getSessionsForDate(
+      widget.date,
+    );
     if (mounted) {
       setState(() {
         _sessions = sessions;
@@ -54,23 +56,13 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
         ),
         title: Text(
           _dateLabel,
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             color: context.cText,
           ),
         ),
-        actions: [
-          // 種目追加
-          IconButton(
-            icon: const Icon(Icons.add, color: kPrimary),
-            onPressed: _addExerciseSheet,
-          ),
-          IconButton(
-            icon: Icon(Icons.share_outlined, color: context.cTextSub),
-            onPressed: () {},
-          ),
-        ],
+        actions: const [],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: kPrimary))
@@ -82,25 +74,39 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                 const SizedBox(height: 16),
                 _buildStreakBanner(),
                 const SizedBox(height: 16),
-                ..._sessions.asMap().entries.map((e) => _buildDismissibleCard(e.key, e.value)),
+                ..._sessions.asMap().entries.map(
+                  (e) => _buildDismissibleCard(e.key, e.value),
+                ),
                 const SizedBox(height: 80),
               ],
             ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          color: kPrimary,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: kPrimary.withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
+      // フッターの上に「この日の記録を追加」ボタン
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: SizedBox(
+            height: 48,
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _addExerciseSheet,
+              icon: const Icon(Icons.add, size: 20),
+              label: Text(
+                'この日の記録を追加',
+                style: AppFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: kPrimary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
-          ],
-        ),
-        child: IconButton(
-          icon: const Icon(Icons.add, color: Colors.white, size: 26),
-          onPressed: _addExerciseSheet,
+          ),
         ),
       ),
     );
@@ -119,7 +125,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           const SizedBox(height: 16),
           Text(
             'トレーニング記録はありません',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w600,
               color: context.cTextSub,
@@ -127,8 +133,8 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '＋ボタンで種目を追加できます',
-            style: GoogleFonts.inter(
+            '「この日の記録を追加」から種目を追加できます',
+            style: AppFonts.inter(
               fontSize: 12,
               color: context.cTextSub.withValues(alpha: 0.6),
             ),
@@ -148,7 +154,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
         if (streakLabel.isNotEmpty)
           Text(
             streakLabel,
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 12,
               color: kPrimary,
               letterSpacing: 1,
@@ -158,40 +164,21 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           const SizedBox.shrink(),
         Text(
           '${_sessions.length} セッション',
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 11,
-            color: context.cTextSub,
-          ),
+          style: AppFonts.jetBrainsMono(fontSize: 11, color: context.cTextSub),
         ),
       ],
     );
   }
 
+  /// 記録カードの長押しで削除確認ダイアログを出す。
   Widget _buildDismissibleCard(int idx, WorkoutSession session) {
-    return Dismissible(
-      key: ValueKey(session.id),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => _confirmDelete(session),
-      onDismissed: (_) async {
+    return GestureDetector(
+      onLongPress: () async {
+        final ok = await _confirmDelete(session);
+        if (ok != true) return;
         await SessionManager.instance.deleteSession(session.id);
         _loadSessions();
       },
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        decoration: BoxDecoration(
-          color: Colors.red.shade900,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_outline, color: Colors.white, size: 24),
-            SizedBox(height: 4),
-            Text('削除', style: TextStyle(color: Colors.white, fontSize: 11)),
-          ],
-        ),
-      ),
       child: _buildSessionCard(idx, session),
     );
   }
@@ -202,26 +189,192 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('記録を削除',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700, color: context.cText)),
+        title: Text(
+          '記録を削除',
+          style: AppFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
+        ),
         content: Text(
           '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
-          style: GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
+          style: AppFonts.inter(fontSize: 14, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+            child: Text(
+              'キャンセル',
+              style: AppFonts.inter(color: context.cTextSub),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('削除',
-                style: GoogleFonts.inter(
-                    color: Colors.red.shade400, fontWeight: FontWeight.w700)),
+            child: Text(
+              '削除',
+              style: AppFonts.inter(
+                color: Colors.red.shade400,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// トレーニング時間の行（開始〜終了と時間）。タップで開始・終了時刻を修正できる。
+  /// 記録がなく、設定でトレーニング時間の記録がオフのときは表示しない。
+  Widget _buildTrainingTimeRow(WorkoutSession session) {
+    final has =
+        session.trainingStartedAt != null && session.trainingEndedAt != null;
+    if (!has && !TrainingTimeService.instance.enabled) {
+      return const SizedBox.shrink();
+    }
+    final d = session.trainingDuration;
+    final label = has
+        ? '${formatHM(session.trainingStartedAt!)} 〜 ${formatHM(session.trainingEndedAt!)}'
+            '${d != null ? '（${d.inMinutes}分）' : ''}'
+        : '未記録（タップして追加）';
+    return InkWell(
+      onTap: () => _editTrainingTime(session),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: context.cCardHigh)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.timer_outlined, size: 14, color: kSecondary),
+            const SizedBox(width: 6),
+            Text('トレーニング時間',
+                style: AppFonts.inter(fontSize: 11, color: context.cTextSub)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label,
+                  style: AppFonts.jetBrainsMono(
+                      fontSize: 11,
+                      color: has ? context.cText : context.cTextSub)),
+            ),
+            Icon(Icons.edit_outlined, size: 14, color: context.cTextSub),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 開始・終了時刻の修正ダイアログ。時刻は、この記録の日付上の時刻として保存する。
+  Future<void> _editTrainingTime(WorkoutSession session) async {
+    final day = session.date;
+    DateTime onDay(TimeOfDay t) =>
+        DateTime(day.year, day.month, day.day, t.hour, t.minute);
+    TimeOfDay? start = session.trainingStartedAt == null
+        ? null
+        : TimeOfDay.fromDateTime(session.trainingStartedAt!);
+    TimeOfDay? end = session.trainingEndedAt == null
+        ? null
+        : TimeOfDay.fromDateTime(session.trainingEndedAt!);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> pick(bool isStart) async {
+            final init = (isStart ? start : end) ??
+                const TimeOfDay(hour: 18, minute: 0);
+            final picked =
+                await showTimePicker(context: ctx, initialTime: init);
+            if (picked == null) return;
+            setLocal(() => isStart ? start = picked : end = picked);
+          }
+
+          String fmt(TimeOfDay? t) => t == null
+              ? '--:--'
+              : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+          final invalid = start != null &&
+              end != null &&
+              !onDay(end!).isAfter(onDay(start!));
+          return AlertDialog(
+            backgroundColor: context.cCardLow,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text('トレーニング時間を修正',
+                style: AppFonts.inter(
+                    fontWeight: FontWeight.w700, color: context.cText)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _timeRow('開始', fmt(start), () => pick(true)),
+                const SizedBox(height: 8),
+                _timeRow('終了', fmt(end), () => pick(false)),
+                if (invalid) ...[
+                  const SizedBox(height: 8),
+                  Text('終了は開始より後の時刻にしてください',
+                      style: AppFonts.inter(
+                          fontSize: 12, color: Colors.red.shade400)),
+                ],
+              ],
+            ),
+            actions: [
+              if (session.trainingStartedAt != null ||
+                  session.trainingEndedAt != null)
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'clear'),
+                  child: Text('消去',
+                      style: AppFonts.inter(color: Colors.red.shade400)),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('キャンセル',
+                    style: AppFonts.inter(color: context.cTextSub)),
+              ),
+              TextButton(
+                onPressed: (start == null || end == null || invalid)
+                    ? null
+                    : () => Navigator.pop(ctx, 'save'),
+                child: Text('保存',
+                    style: AppFonts.inter(
+                        color: kPrimary, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (result == 'save' && start != null && end != null) {
+      await SessionManager.instance
+          .updateTrainingTime(session.id, onDay(start!), onDay(end!));
+    } else if (result == 'clear') {
+      await SessionManager.instance.updateTrainingTime(session.id, null, null);
+    } else {
+      return;
+    }
+    _loadSessions();
+  }
+
+  Widget _timeRow(String label, String value, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 48,
+              child: Text(label,
+                  style: AppFonts.inter(fontSize: 13, color: context.cTextSub)),
+            ),
+            Text(value,
+                style: AppFonts.jetBrainsMono(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: context.cText)),
+            const Spacer(),
+            Icon(Icons.access_time, size: 18, color: context.cTextSub),
+          ],
+        ),
       ),
     );
   }
@@ -230,9 +383,10 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
     final isExpanded = _expandedSessions.contains(idx);
     final totalVolume = session.exercises.fold(
       0.0,
-      (sum, ex) => sum + ex.sets.fold(0.0, (s, set) => s + set.weight * set.reps),
+      (sum, ex) =>
+          sum + ex.sets.fold(0.0, (s, set) => s + set.weight * set.reps),
     );
-    final duration = session.finishedAt?.difference(session.startedAt);
+    final duration = session.trainingDuration;
     final startLabel = formatHM(session.startedAt);
 
     return Container(
@@ -265,8 +419,11 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                       color: kPrimary.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.fitness_center,
-                        color: kPrimary, size: 22),
+                    child: const Icon(
+                      Icons.fitness_center,
+                      color: kPrimary,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -278,7 +435,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                           children: [
                             Text(
                               session.sessionName ?? '記録',
-                              style: GoogleFonts.inter(
+                              style: AppFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                                 color: context.cText,
@@ -286,7 +443,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                             ),
                             Text(
                               startLabel,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: AppFonts.jetBrainsMono(
                                 fontSize: 10,
                                 color: context.cTextSub,
                               ),
@@ -301,7 +458,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                               : session.exercises.map((e) => e.name).join(', '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                             fontSize: 11,
                             color: context.cTextSub,
                           ),
@@ -309,23 +466,29 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            Icon(Icons.trending_up,
-                                size: 13, color: kTertiary),
+                            Icon(Icons.trending_up, size: 13, color: kTertiary),
                             const SizedBox(width: 4),
                             Text(
                               '${totalVolume.toStringAsFixed(0)} kg',
-                              style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 11, color: context.cText),
+                              style: AppFonts.jetBrainsMono(
+                                fontSize: 11,
+                                color: context.cText,
+                              ),
                             ),
                             if (duration != null) ...[
                               const SizedBox(width: 14),
-                              Icon(Icons.timer_outlined,
-                                  size: 13, color: kSecondary),
+                              Icon(
+                                Icons.timer_outlined,
+                                size: 13,
+                                color: kSecondary,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 '${duration.inMinutes} 分',
-                                style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 11, color: context.cText),
+                                style: AppFonts.jetBrainsMono(
+                                  fontSize: 11,
+                                  color: context.cText,
+                                ),
                               ),
                             ],
                           ],
@@ -337,13 +500,17 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   AnimatedRotation(
                     turns: isExpanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
-                    child: Icon(Icons.keyboard_arrow_down,
-                        color: context.cBorder, size: 22),
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: context.cBorder,
+                      size: 22,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
+          _buildTrainingTimeRow(session),
           // 展開時: 種目リスト
           if (isExpanded) ...[
             Divider(height: 1, color: context.cCardHigh),
@@ -356,9 +523,15 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
     );
   }
 
-  Widget _buildExerciseRow(WorkoutSession session, int exIdx, Exercise exercise) {
-    final totalVol = exercise.sets
-        .fold(0.0, (s, set) => s + set.weight * set.reps);
+  Widget _buildExerciseRow(
+    WorkoutSession session,
+    int exIdx,
+    Exercise exercise,
+  ) {
+    final totalVol = exercise.sets.fold(
+      0.0,
+      (s, set) => s + set.weight * set.reps,
+    );
     final maxRM = exercise.sets.isEmpty
         ? 0.0
         : exercise.sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
@@ -410,7 +583,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   if (session.routineName != null)
                     Text(
                       session.routineName!,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                         fontSize: 9,
                         color: kPrimary.withValues(alpha: 0.7),
                         letterSpacing: 0.5,
@@ -419,12 +592,16 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   Row(
                     children: [
                       if (session.routineName != null)
-                        Text('› ',
-                            style: GoogleFonts.jetBrainsMono(
-                                fontSize: 12, color: kPrimary)),
+                        Text(
+                          '› ',
+                          style: AppFonts.jetBrainsMono(
+                            fontSize: 12,
+                            color: kPrimary,
+                          ),
+                        ),
                       Text(
                         exercise.name,
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: context.cText,
@@ -433,14 +610,16 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 1),
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: context.cCardHigh,
                           borderRadius: BorderRadius.circular(99),
                         ),
                         child: Text(
                           exercise.muscleGroup.label,
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                             fontSize: 9,
                             color: context.cTextSub,
                           ),
@@ -452,7 +631,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                   // セットサマリー
                   Text(
                     '${exercise.sets.length} セット  •  ${totalVol.toStringAsFixed(0)} kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 10,
                       color: context.cTextSub,
                     ),
@@ -466,7 +645,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               children: [
                 Text(
                   '1RM',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 9,
                     color: context.cTextSub,
                     letterSpacing: 0.5,
@@ -474,7 +653,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                 ),
                 Text(
                   '${maxRM.toStringAsFixed(1)}kg',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: kTertiary,
@@ -499,9 +678,11 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
         onSelected: (exercise) async {
           // 当日の記録に同じ種目があれば編集モードで開く
           final existing = _sessions
-              .expand((s) => s.exercises
-                  .where((e) => e.name == exercise.name)
-                  .map((ex) => (session: s, exercise: ex)))
+              .expand(
+                (s) => s.exercises
+                    .where((e) => e.name == exercise.name)
+                    .map((ex) => (session: s, exercise: ex)),
+              )
               .firstOrNull;
 
           if (!context.mounted) return;
@@ -517,16 +698,13 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               ),
             );
           } else {
-            // 過去日付の新規種目 → 指定日付でセッションを作成してから記録
-            final session = await SessionManager.instance
-                .createSessionForDate(widget.date);
-            if (!context.mounted) return;
+            // 新規種目 → 指定日付に記録（セッションは入力・保存時に作成される）
             await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ExerciseRecordScreen(
                   exercise: exercise,
-                  sessionId: session.id,
+                  targetDate: widget.date,
                 ),
               ),
             );

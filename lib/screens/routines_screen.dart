@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
+import '../services/user_preferences.dart';
 import 'exercise_record_screen.dart';
 import 'routine_detail_screen.dart';
 
@@ -13,10 +14,30 @@ class RoutinesScreen extends StatefulWidget {
 }
 
 class _RoutinesScreenState extends State<RoutinesScreen> {
-  int _tabIndex = 0;      // 0: マイセット, 1: すべての種目
-  bool _isEditMode = false; // ルーチン編集モード
+  int _tabIndex = 0;
+  bool _isEditMode = false;
 
   final List<Map<String, dynamic>> _routines = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoutines();
+  }
+
+  Future<void> _loadRoutines() async {
+    final saved = await UserPreferences.instance.getRoutines();
+    if (mounted && saved.isNotEmpty) {
+      setState(() {
+        _routines.clear();
+        _routines.addAll(saved);
+      });
+    }
+  }
+
+  Future<void> _saveRoutines() async {
+    await UserPreferences.instance.saveRoutines(_routines);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +48,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
         elevation: 0,
         title: Text(
           'ROUTINES',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: kPrimary,
@@ -71,7 +92,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                       const SizedBox(width: 5),
                       Text(
                         _isEditMode ? '完了' : 'ルーチンを編集',
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: _isEditMode ? kPrimary : context.cTextSub,
@@ -133,7 +154,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: active ? kPrimary : context.cTextSub,
@@ -167,7 +188,10 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                   MaterialPageRoute(
                     builder: (_) => RoutineDetailScreen(routine: routine),
                   ),
-                ),
+                ).then((_) {
+                  _saveRoutines();
+                  setState(() {});
+                }),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -193,7 +217,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                       children: [
                         Text(
                           routine['name'] as String,
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: context.cText,
@@ -202,7 +226,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                         const SizedBox(height: 2),
                         Text(
                           '${(routine['exercises'] as List).length} 種目 • ${routine['duration']}',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                             fontSize: 10,
                             color: context.cTextSub,
                           ),
@@ -215,6 +239,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     GestureDetector(
                       onTap: () {
                         setState(() => _routines.removeAt(idx));
+                        _saveRoutines();
                       },
                       child: Container(
                         width: 28,
@@ -254,7 +279,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     ),
                     child: Text(
                       ex,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                         fontSize: 10,
                         color: context.cTextSub,
                       ),
@@ -295,7 +320,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                         const SizedBox(width: 6),
                         Text(
                           '開始',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
@@ -322,7 +347,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '新しいルーチン',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontWeight: FontWeight.w700,
             color: context.cText,
           ),
@@ -330,10 +355,10 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: GoogleFonts.inter(color: context.cText),
+          style: AppFonts.inter(color: context.cText),
           decoration: InputDecoration(
             hintText: 'ルーチン名を入力',
-            hintStyle: GoogleFonts.inter(color: context.cTextSub),
+            hintStyle: AppFonts.inter(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: context.cBorderSub),
             ),
@@ -346,7 +371,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () {
@@ -360,11 +385,12 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     'group': MuscleGroup.chest,
                   });
                 });
+                _saveRoutines();
                 Navigator.pop(ctx);
               }
             },
             child: Text('作成',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -393,7 +419,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
             const SizedBox(width: 8),
             Text(
               '新しいルーチンを作成',
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                 fontSize: 13,
                 color: context.cTextSub.withValues(alpha: 0.4),
               ),
@@ -434,7 +460,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                 children: [
                   Text(
                     e['name'] as String,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: context.cText,
@@ -450,7 +476,7 @@ class _RoutinesScreenState extends State<RoutinesScreen> {
                     ),
                     child: Text(
                       (e['group'] as MuscleGroup).label,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                         fontSize: 10,
                         color: context.cTextSub,
                       ),

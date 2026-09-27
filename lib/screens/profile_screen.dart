@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:app_settings/app_settings.dart' as os_settings;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -9,8 +12,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 import '../services/app_settings.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 import '../services/user_preferences.dart';
 import '../services/session_manager.dart';
+import '../services/training_time_service.dart';
 import 'auth_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -25,13 +30,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _weightCtrl = TextEditingController();
   String _gender = '男性';
   bool _shareStats = false;
+  bool _restNotification = false;
+  bool _isKg = true;
   bool _isLoading = true;
   String? _imagePath;
+
+  Timer? _saveDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
+    _nameCtrl.addListener(_autoSave);
+    _weightCtrl.addListener(_autoSave);
   }
 
   Future<void> _loadPrefs() async {
@@ -39,18 +50,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final name      = await prefs.getUsername();
     final weight    = await prefs.getBodyWeight();
     final gender    = await prefs.getGender();
-    final share     = await prefs.getShareStats();
-    final imagePath = await prefs.getProfileImagePath();
+    final share           = await prefs.getShareStats();
+    final restNotif       = await prefs.getRestNotification();
+    final imagePath       = await prefs.getProfileImagePath();
+    final isKg            = await prefs.getIsKg();
     if (mounted) {
       setState(() {
-        _nameCtrl.text   = name;
-        _weightCtrl.text = weight.toStringAsFixed(1);
-        _gender          = gender;
-        _shareStats      = share;
-        _imagePath       = imagePath;
-        _isLoading       = false;
+        _nameCtrl.text    = name;
+        _weightCtrl.text  = weight.toStringAsFixed(1);
+        _gender           = gender;
+        _shareStats       = share;
+        _restNotification = restNotif;
+        _imagePath        = imagePath;
+        _isKg             = isKg;
+        _isLoading        = false;
       });
     }
+  }
+
+  void _autoSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 600), _savePrefs);
+  }
+
+  Future<void> _savePrefs() async {
+    final weight = double.tryParse(_weightCtrl.text);
+    if (weight == null || weight <= 0) return;
+
+    final prefs = UserPreferences.instance;
+    await prefs.setUsername(_nameCtrl.text.trim());
+    await prefs.setBodyWeight(weight);
+    await prefs.setGender(_gender);
+    await prefs.setShareStats(_shareStats);
+    await prefs.setIsKg(_isKg);
+    await AppSettings.instance.setThemeMode(AppSettings.instance.themeMode);
+    await AppSettings.instance.setTextScale(AppSettings.instance.textScale);
   }
 
   Future<void> _pickImage() async {
@@ -71,45 +105,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    _saveDebounce?.cancel();
+    _nameCtrl.removeListener(_autoSave);
+    _weightCtrl.removeListener(_autoSave);
     _nameCtrl.dispose();
     _weightCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _savePrefs() async {
-    FocusScope.of(context).unfocus();
-    final weight = double.tryParse(_weightCtrl.text);
-    if (weight == null || weight <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('体重に正しい数値を入力してください',
-              style: GoogleFonts.inter(color: Colors.white)),
-          backgroundColor: Colors.red.shade800,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-      return;
-    }
-
-    final prefs = UserPreferences.instance;
-    await prefs.setUsername(_nameCtrl.text.trim());
-    await prefs.setBodyWeight(weight);
-    await prefs.setGender(_gender);
-    await prefs.setShareStats(_shareStats);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('プロフィールを保存しました',
-            style: GoogleFonts.inter(color: Colors.white)),
-        backgroundColor: context.cCardHigh,
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
   }
 
   @override
@@ -120,8 +121,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: context.cBg.withValues(alpha: 0.85),
         elevation: 0,
         title: Text(
-          'PROFILE',
-          style: GoogleFonts.inter(
+          '設定',
+          style: AppFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: kPrimary,
@@ -189,7 +190,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: _textField(
                         _weightCtrl,
                         inputType: TextInputType.number,
-                        suffix: 'kg',
+                        suffix: _isKg ? 'kg' : 'lbs',
                       ),
                     ),
                     Divider(height: 1, color: context.cCardHigh),
@@ -200,7 +201,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: ['男性', '女性'].map((g) {
                           final active = _gender == g;
                           return GestureDetector(
-                            onTap: () => setState(() => _gender = g),
+                            onTap: () {
+                              setState(() => _gender = g);
+                              _autoSave();
+                            },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 150),
                               margin: const EdgeInsets.only(left: 8),
@@ -212,18 +216,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color:
-                                      active ? kPrimary : context.cBorderSub,
+                                  color: active ? kPrimary : context.cBorderSub,
                                 ),
                               ),
                               child: Text(
                                 g,
-                                style: GoogleFonts.inter(
+                                style: AppFonts.inter(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: active
-                                      ? kPrimary
-                                      : context.cTextSub,
+                                  color: active ? kPrimary : context.cTextSub,
                                 ),
                               ),
                             ),
@@ -249,6 +250,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildPrivacyPolicyLink(),
                 const SizedBox(height: 24),
 
+                // ── 通知設定 ──
+                _sectionHeader('通知'),
+                const SizedBox(height: 12),
+                _buildNotificationCard(),
+                const SizedBox(height: 24),
+
+                // ── トレーニング時間 ──
+                _sectionHeader('トレーニング時間'),
+                const SizedBox(height: 12),
+                _buildTrainingTimeCard(),
+                const SizedBox(height: 24),
+
                 // ── 表示設定 ──
                 _sectionHeader('表示設定'),
                 const SizedBox(height: 12),
@@ -266,14 +279,178 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 12),
                 _buildStatsRow(),
                 const SizedBox(height: 32),
-
-                // ── 保存ボタン ──
-                ElevatedButton(
-                  onPressed: _savePrefs,
-                  child: const Text('保存'),
-                ),
               ],
             ),
+    );
+  }
+
+  // ── トレーニング時間カード ────────────────────────────────────
+  Widget _buildTrainingTimeCard() {
+    final svc = TrainingTimeService.instance;
+    return ListenableBuilder(
+      listenable: svc,
+      builder: (context, _) => _buildCard(
+        children: [
+          _switchRow(
+            label: 'タイマーでトレーニング時間を記録',
+            sub: svc.isRunning
+                ? '記録中は変更できません（分析タブのストップウォッチで終了してください）'
+                : '分析タブのストップウォッチカードのスイッチと連動します',
+            value: svc.enabled,
+            onChanged: svc.isRunning ? (_) {} : (v) => svc.setEnabled(v),
+          ),
+          if (svc.enabled) ...[
+            Divider(height: 1, color: context.cCardHigh),
+            InkWell(
+              onTap: _pickAutoEndMinutes,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('自動終了までの時間',
+                              style: AppFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.cText)),
+                          const SizedBox(height: 2),
+                          Text('最後の記録からこの時間が過ぎると、最後の記録の時刻で終了します',
+                              style: AppFonts.inter(
+                                  fontSize: 11, color: context.cTextSub)),
+                        ],
+                      ),
+                    ),
+                    Text(TrainingTimeService.labelFor(svc.autoEndMinutes),
+                        style: AppFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: kPrimary)),
+                    Icon(Icons.chevron_right,
+                        size: 20, color: context.cTextSub),
+                  ],
+                ),
+              ),
+            ),
+            Divider(height: 1, color: context.cCardHigh),
+            _switchRow(
+              label: '開始し忘れの確認',
+              sub: '記録したのにトレーニング開始が押されていないとき、開始するか確認します',
+              value: !svc.suppressStartPrompt,
+              onChanged: (v) => svc.setSuppressStartPrompt(!v),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAutoEndMinutes() async {
+    final svc = TrainingTimeService.instance;
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: context.cCardLow,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final m in TrainingTimeService.autoEndChoices)
+              ListTile(
+                title: Text(TrainingTimeService.labelFor(m),
+                    style: AppFonts.inter(color: context.cText)),
+                trailing: m == svc.autoEndMinutes
+                    ? const Icon(Icons.check, color: kPrimary)
+                    : null,
+                onTap: () => Navigator.pop(ctx, m),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) await svc.setAutoEndMinutes(picked);
+  }
+
+  // ── 通知設定カード ────────────────────────────────────────────
+  Widget _buildNotificationCard() {
+    return _buildCard(
+      children: [
+        _switchRow(
+          label: 'トレーニング通知',
+          sub: 'トレーニング時間・休憩タイマーの通知を使用',
+          value: _restNotification,
+          onChanged: (v) async {
+            if (v) {
+              final granted =
+                  await NotificationService.instance.requestPermission();
+              if (!granted || !mounted) return;
+            }
+            await UserPreferences.instance.setRestNotification(v);
+            if (mounted) setState(() => _restNotification = v);
+          },
+        ),
+        Divider(height: 1, color: context.cCardHigh),
+        InkWell(
+          onTap: () => os_settings.AppSettings.openAppSettings(
+            type: os_settings.AppSettingsType.notification,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('端末の通知設定を開く',
+                      style: AppFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: context.cText)),
+                ),
+                Icon(Icons.chevron_right, size: 20, color: context.cTextSub),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _switchRow({
+    required String label,
+    String? sub,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: AppFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: context.cText)),
+                if (sub != null) ...[
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      style: AppFonts.inter(
+                          fontSize: 11, color: context.cTextSub)),
+                ],
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: kPrimary,
+          ),
+        ],
+      ),
     );
   }
 
@@ -294,14 +471,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               children: [
                 Text('ライトモード',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
                 const Spacer(),
                 Switch(
                   value: isLight,
                   activeThumbColor: kPrimary,
-                  onChanged: (v) => AppSettings.instance
-                      .setThemeMode(v ? ThemeMode.light : ThemeMode.dark),
+                  onChanged: (v) async {
+                    final mode = v ? ThemeMode.light : ThemeMode.dark;
+                    await AppSettings.instance.setThemeMode(mode);
+                    setState(() {});
+                  },
                 ),
               ],
             ),
@@ -315,12 +495,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Row(
                   children: [
                     Text('文字サイズ',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
                     const Spacer(),
                     Text(
                       scale <= 1.0 ? '標準' : scale <= 1.15 ? '大' : '特大',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 12, color: context.cText, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -332,16 +512,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   divisions: 2,
                   activeColor: kPrimary,
                   inactiveColor: context.cCardHigh,
-                  onChanged: (v) {
+                  onChanged: (v) async {
                     final snapped = v < 1.08 ? 1.0 : v < 1.22 ? 1.15 : 1.3;
-                    AppSettings.instance.setTextScale(snapped);
+                    await AppSettings.instance.setTextScale(snapped);
                     setState(() {});
                   },
                 ),
               ],
             ),
           ),
+          Divider(height: 1, color: context.cCardHigh),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
+              children: [
+                Text('重量単位',
+                    style: AppFonts.jetBrainsMono(
+                        fontSize: 11, color: context.cTextSub, letterSpacing: 0.5)),
+                const Spacer(),
+                _unitToggle(),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _unitToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: context.cBorder),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        _unitBtn('kg', _isKg),
+        _unitBtn('lbs', !_isKg),
+      ]),
+    );
+  }
+
+  Widget _unitBtn(String label, bool active) {
+    return GestureDetector(
+      onTap: () {
+        setState(() => _isKg = label == 'kg');
+        _autoSave();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? kPrimary.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Text(
+          label,
+          style: AppFonts.jetBrainsMono(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: active ? kPrimary : context.cTextSub,
+          ),
+        ),
       ),
     );
   }
@@ -377,13 +607,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('不具合を報告',
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: context.cText)),
                     const SizedBox(height: 2),
-                    Text('バグ・改善要望をメールで送信',
-                        style: GoogleFonts.inter(
+                    Text('バグ・改善要望を送信',
+                        style: AppFonts.inter(
                             fontSize: 11, color: context.cTextSub)),
                   ],
                 ),
@@ -403,13 +633,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         title: Text('不具合を報告',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('発生した不具合や改善要望を入力してください。',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     fontSize: 13, color: context.cTextSub, height: 1.4)),
             const SizedBox(height: 12),
             TextField(
@@ -424,7 +654,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              style: GoogleFonts.inter(fontSize: 13, color: context.cText),
+              style: AppFonts.inter(fontSize: 13, color: context.cText),
             ),
           ],
         ),
@@ -432,27 +662,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('送信',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    final body = Uri.encodeComponent(ctrl.text.trim().isEmpty
-        ? '（内容なし）'
-        : ctrl.text.trim());
-    final uri = Uri.parse(
-        'mailto:yuta.sakai.0724@gmail.com'
-        '?subject=RepRank%20不具合報告'
-        '&body=$body');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+
+    final text = ctrl.text.trim().isEmpty ? '（内容なし）' : ctrl.text.trim();
+    bool sent = false;
+
+    try {
+      await FirebaseFirestore.instance.collection('bug_reports').add({
+        'body': text,
+        'timestamp': FieldValue.serverTimestamp(),
+        'platform': Platform.operatingSystem,
+        'appVersion': '1.1.1',
+        'uid': AuthService.instance.currentUser?.uid,
+      });
+      sent = true;
+    } catch (_) {
+      // Firestore失敗時はメールフォールバック
+      final body = Uri.encodeComponent(text);
+      final uri = Uri.parse(
+          'mailto:yuta.sakai.0724@gmail.com'
+          '?subject=RepRank%20不具合報告'
+          '&body=$body');
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+        sent = true;
+      }
+    }
+
+    if (sent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('報告を送信しました。ありがとうございます！',
+              style: AppFonts.inter(color: Colors.white)),
+          backgroundColor: context.cCardHigh,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     }
   }
 
@@ -525,7 +782,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _sectionHeader(String title) {
     return Text(
       title.toUpperCase(),
-      style: GoogleFonts.jetBrainsMono(
+      style: AppFonts.jetBrainsMono(
           fontSize: 10, color: context.cTextSub, letterSpacing: 1.5),
     );
   }
@@ -538,13 +795,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final isSignedIn = user != null && !(user.isAnonymous);
 
         if (isSignedIn) {
-          // ログイン済み
           return Container(
             decoration: BoxDecoration(
               color: context.cCardLow,
               borderRadius: BorderRadius.circular(16),
-              border:
-                  Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Column(
               children: [
@@ -568,14 +823,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('同期中',
-                                style: GoogleFonts.inter(
+                                style: AppFonts.inter(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
                                     color: kPrimary)),
                             const SizedBox(height: 2),
                             Text(
                               user.email ?? user.uid,
-                              style: GoogleFonts.inter(
+                              style: AppFonts.inter(
                                   fontSize: 12, color: context.cTextSub),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -588,10 +843,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Divider(height: 1, color: context.cCardHigh),
                 InkWell(
                   onTap: _signOut,
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
-                  ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
@@ -601,8 +852,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             size: 18, color: context.cTextSub),
                         const SizedBox(width: 12),
                         Text('ログアウト',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.inter(
                                 fontSize: 14, color: context.cTextSub)),
+                      ],
+                    ),
+                  ),
+                ),
+                Divider(height: 1, color: context.cCardHigh),
+                InkWell(
+                  onTap: _deleteAccount,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.delete_forever_outlined,
+                            size: 18, color: Colors.redAccent),
+                        const SizedBox(width: 12),
+                        Text('アカウントを削除',
+                            style: AppFonts.inter(
+                                fontSize: 14, color: Colors.redAccent)),
                       ],
                     ),
                   ),
@@ -612,7 +885,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
 
-        // 未ログイン
         return GestureDetector(
           onTap: () => Navigator.push(context,
               MaterialPageRoute(builder: (_) => const AuthScreen())),
@@ -621,8 +893,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             decoration: BoxDecoration(
               color: context.cCardLow,
               borderRadius: BorderRadius.circular(16),
-              border:
-                  Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Row(
               children: [
@@ -642,19 +913,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('ログイン / アカウント作成',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: context.cText)),
                       const SizedBox(height: 2),
                       Text('データをバックアップ・複数端末で同期',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.inter(
                               fontSize: 11, color: context.cTextSub)),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right,
-                    size: 20, color: context.cTextSub),
+                Icon(Icons.chevron_right, size: 20, color: context.cTextSub),
               ],
             ),
           ),
@@ -669,26 +939,92 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         title: Text('ログアウト',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: Text('ログアウトしますか？\nデータはこの端末に保持されます。',
-            style: GoogleFonts.inter(color: context.cTextSub)),
+            style: AppFonts.inter(color: context.cTextSub)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text('ログアウト',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
     if (confirm == true) await AuthService.instance.signOut();
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cCardLow,
+        title: Text('アカウントを削除',
+            style: AppFonts.inter(
+                fontWeight: FontWeight.w700, color: Colors.redAccent)),
+        content: Text(
+            'アカウントを完全に削除します。\nクラウドに保存されたデータも全て削除されます。\nこの操作は取り消せません。',
+            style: AppFonts.inter(color: context.cTextSub, height: 1.6)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('キャンセル',
+                style: AppFonts.inter(color: context.cTextSub)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('削除する',
+                style: AppFonts.inter(
+                    color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    try {
+      await AuthService.instance.deleteAccount();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('アカウントを削除しました',
+                style: AppFonts.inter(color: Colors.white)),
+            backgroundColor: context.cCardHigh,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('セキュリティのため再ログインが必要です。一度ログアウトして再度ログインしてください。',
+                style: AppFonts.inter(color: Colors.white)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        return;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('削除に失敗しました: ${e.message}',
+                style: AppFonts.inter(color: Colors.white)),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildPrivacyCard() {
@@ -707,7 +1043,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   '匿名統計データを共有',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: context.cText,
@@ -715,8 +1051,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'ヒストグラム機能の精度向上のため、種目名と体重比のみを匿名で送信します。個人を特定する情報は送信されません。',
-                  style: GoogleFonts.inter(
+                  'ヒストグラム機能の精度向上のため、種目名と体重比のみを匿名で送信します。',
+                  style: AppFonts.inter(
                     fontSize: 11,
                     color: context.cTextSub,
                     height: 1.4,
@@ -728,7 +1064,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 12),
           Switch(
             value: _shareStats,
-            onChanged: (v) => setState(() => _shareStats = v),
+            onChanged: (v) {
+              setState(() => _shareStats = v);
+              _autoSave();
+            },
             activeThumbColor: kPrimary,
           ),
         ],
@@ -744,8 +1083,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         mode: LaunchMode.externalApplication,
       ),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: context.cCardLow,
           borderRadius: BorderRadius.circular(12),
@@ -753,19 +1091,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         child: Row(
           children: [
-            Icon(Icons.privacy_tip_outlined,
-                size: 18, color: context.cTextSub),
+            Icon(Icons.privacy_tip_outlined, size: 18, color: context.cTextSub),
             const SizedBox(width: 12),
             Text(
               'プライバシーポリシー',
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: context.cText),
             ),
             const Spacer(),
-            Icon(Icons.open_in_new,
-                size: 14, color: context.cTextSub),
+            Icon(Icons.open_in_new, size: 14, color: context.cTextSub),
           ],
         ),
       ),
@@ -789,7 +1125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Row(
         children: [
           Text(label,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   color: context.cTextSub,
                   letterSpacing: 0.5)),
@@ -808,7 +1144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         controller: ctrl,
         keyboardType: inputType,
         textAlign: TextAlign.right,
-        style: GoogleFonts.inter(fontSize: 14, color: context.cText),
+        style: AppFonts.inter(fontSize: 14, color: context.cText),
         decoration: InputDecoration(
           isDense: true,
           contentPadding:
@@ -819,7 +1155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             borderSide: BorderSide(color: kPrimary, width: 1),
           ),
           suffixText: suffix,
-          suffixStyle: GoogleFonts.jetBrainsMono(
+          suffixStyle: AppFonts.jetBrainsMono(
               fontSize: 12, color: context.cTextSub),
         ),
       ),
@@ -849,7 +1185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 TextSpan(
                   text: value,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: context.cText,
@@ -857,7 +1193,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 TextSpan(
                   text: unit,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 11, color: context.cTextSub),
                 ),
               ],
@@ -865,7 +1201,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 4),
           Text(label,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 9, color: context.cTextSub),
               textAlign: TextAlign.center),
         ],

@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "960167971414-b0mqt06q00kn9vsjmfep85fk6uo7isnv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yutasakai.reprank",
+            "certificate_hash": "3267d1b1971968846d5a5423b846638e726940e0"
+          }
+        },
+        {
+          "client_id": "960167971414-rm7mfq73f5uc406c0erhb9tai1tp5a94.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yutasakai.reprank",
+            "certificate_hash": "d2dd0a93be989d72cfa1e42f36de1e13ce3338be"
+          }
+        },
+        {
           "client_id": "960167971414-rogmbb1f105d7su3osrufor6oe5ilfag.apps.googleusercontent.com",
           "client_type": 3
         }

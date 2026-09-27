@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:fl_chart/fl_chart.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../data/strength_standards.dart';
 import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
+import 'exercise_history_screen.dart';
+import 'exercise_record_screen.dart';
+import '../widgets/trend_chart_card.dart';
 
 class ExerciseAnalysisScreen extends StatefulWidget {
   final Exercise exercise;
@@ -27,8 +29,10 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   double _bodyWeight = 70.0;
   String _gender = '男性';
   late StrengthResult _result;
-  // 1RM 推移データ: {date → maxOneRM}
-  List<_RMPoint> _history = [];
+  List<ExerciseHistoryPoint> _history = [];
+  List<_VolumePoint> _volumeHistory = [];
+
+  static const int _historyCollapsedCount = 5;
 
   @override
   void initState() {
@@ -51,22 +55,26 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
 
   Future<void> _loadHistory() async {
     final sessions = await SessionManager.instance.getAllSessions();
-    final Map<String, double> byDate = {};
+    final points = buildExerciseHistory(sessions, widget.exercise.name);
+    final Map<String, double> volByDate = {};
     for (final s in sessions) {
       final dateKey = formatYMD(s.date);
       for (final ex in s.exercises) {
-        if (ex.name != widget.exercise.name) continue;
-        if (ex.sets.isEmpty) continue;
-        final maxRM =
-            ex.sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
-        byDate[dateKey] = maxRM > (byDate[dateKey] ?? 0) ? maxRM : byDate[dateKey]!;
+        if (ex.name != widget.exercise.name || ex.sets.isEmpty) continue;
+        final vol = ex.sets.fold(0.0, (sum, x) => sum + x.weight * x.reps);
+        volByDate[dateKey] = (volByDate[dateKey] ?? 0) + vol;
       }
     }
-    final points = byDate.entries
-        .map((e) => _RMPoint(date: e.key, oneRM: e.value))
+    final volPoints = volByDate.entries
+        .map((e) => _VolumePoint(date: e.key, volume: e.value))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
-    if (mounted) setState(() => _history = points);
+    if (mounted) {
+      setState(() {
+        _history = points;
+        _volumeHistory = volPoints;
+      });
+    }
   }
 
   void _recalculate() {
@@ -89,17 +97,17 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('体重を設定',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           keyboardType:
               const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.inter(color: context.cText),
+          style: AppFonts.inter(color: context.cText),
           decoration: InputDecoration(
             suffixText: 'kg',
-            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
+            suffixStyle: AppFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: context.cBorderSub)),
             focusedBorder: UnderlineInputBorder(
@@ -110,7 +118,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () async {
@@ -127,7 +135,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text('保存',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -151,7 +159,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
           children: [
             Text(
               widget.exercise.name,
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: kPrimary,
@@ -160,7 +168,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             ),
             Text(
               '強度分析',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 10, color: context.cTextSub),
             ),
           ],
@@ -176,14 +184,14 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Text(
                     '${_bodyWeight.toStringAsFixed(1)}kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: context.cText),
                   ),
                   Text(
                     '体重 ✎',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 9, color: context.cTextSub),
                   ),
                 ],
@@ -197,15 +205,17 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           _buildCurrentRM(),
           const SizedBox(height: 16),
+          _buildHistoryList(),
+          const SizedBox(height: 16),
           _buildLevelBar(),
           const SizedBox(height: 16),
           _buildNextGoalCard(),
           const SizedBox(height: 16),
           _buildThresholdTable(),
           const SizedBox(height: 16),
-          _buildHistogram(),
+          _buildTrendChart(),
           const SizedBox(height: 16),
-          _buildHistoryChart(),
+          _buildHistogram(),
           const SizedBox(height: 40),
         ],
       ),
@@ -221,7 +231,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: tier.color.withValues(alpha: 0.25)),
+            color: tier.colorForContext(context).withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
@@ -231,7 +241,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               children: [
                 Text(
                   '現在の推定1RM',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 10,
                       color: context.cTextSub,
                       letterSpacing: 1),
@@ -242,7 +252,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   children: [
                     Text(
                       widget.currentOneRM.toStringAsFixed(1),
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 48,
                         fontWeight: FontWeight.w900,
                         color: context.cText,
@@ -255,7 +265,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Text(
                         'kg',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 16, color: context.cTextSub),
                       ),
                     ),
@@ -264,7 +274,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '体重比 ${(_result.oneRM / _bodyWeight).toStringAsFixed(2)}x',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 11, color: context.cTextSub),
                 ),
               ],
@@ -275,25 +285,102 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: tier.color.withValues(alpha: 0.12),
+              color: tier.colorForContext(context).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: tier.color.withValues(alpha: 0.3)),
+              border: Border.all(color: tier.colorForContext(context).withValues(alpha: 0.3)),
             ),
             child: Column(
               children: [
-                Icon(_tierIcon(tier), color: tier.color, size: 28),
+                Icon(_tierIcon(tier), color: tier.colorForContext(context), size: 28),
                 const SizedBox(height: 6),
                 Text(
                   tier.label,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: tier.color,
+                    color: tier.colorForContext(context),
                   ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ── 過去の記録一覧 ───────────────────────────────────────────
+  Widget _buildHistoryList() {
+    if (_history.isEmpty) return const SizedBox.shrink();
+
+    // 新しい順に並べ替え
+    final sorted = List<ExerciseHistoryPoint>.from(_history)
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    final bestOneRM =
+        sorted.map((p) => p.oneRM).reduce((a, b) => a > b ? a : b);
+    final visible = sorted.take(_historyCollapsedCount).toList();
+    final hasMore = sorted.length > _historyCollapsedCount;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.cCardLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '過去の記録',
+            style: AppFonts.jetBrainsMono(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: context.cTextSub,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final p in visible)
+            ExerciseHistoryRow(
+              point: p,
+              isBest: p.oneRM == bestOneRM,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ExerciseRecordScreen(
+                    exercise: p.exercise,
+                    sessionId: p.sessionId,
+                  ),
+                ),
+              ).then((_) => _loadHistory()),
+            ),
+          // 直近 5 件を超える分は、過去の記録一覧画面で全件を見る
+          if (hasMore)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ExerciseHistoryScreen(
+                    exerciseName: widget.exercise.name,
+                  ),
+                ),
+              ).then((_) => _loadHistory()),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Center(
+                  child: Text(
+                    'すべて見る（全 ${sorted.length} 件）',
+                    style: AppFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -313,7 +400,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           Text(
             'レベル進捗',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 14),
@@ -328,7 +415,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   height: 8,
                   decoration: BoxDecoration(
                     color: isActive
-                        ? t.color.withValues(alpha: isCurrent ? 1.0 : 0.5)
+                        ? t.colorForContext(context).withValues(alpha: isCurrent ? 1.0 : 0.5)
                         : context.cCardHigh,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -345,12 +432,12 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 child: Text(
                   t.label,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 9,
                     fontWeight: isCurrent
                         ? FontWeight.w700
                         : FontWeight.w400,
-                    color: isCurrent ? t.color : context.cTextSub,
+                    color: isCurrent ? t.colorForContext(context) : context.cTextSub,
                   ),
                 ),
               );
@@ -364,15 +451,15 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               children: [
                 Text(
                   '${_result.tier.label} 内の進捗',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 10, color: context.cTextSub),
                 ),
                 Text(
                   '${(_result.progressInTier * 100).toStringAsFixed(0)}%',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: _result.tier.color,
+                    color: _result.tier.colorForContext(context),
                   ),
                 ),
               ],
@@ -385,7 +472,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 minHeight: 6,
                 backgroundColor: context.cCardHigh,
                 valueColor:
-                    AlwaysStoppedAnimation(_result.tier.color),
+                    AlwaysStoppedAnimation(_result.tier.colorForContext(context)),
               ),
             ),
           ],
@@ -417,7 +504,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Text(
                     'エリート達成！',
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFFFFD700),
@@ -425,7 +512,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   ),
                   Text(
                     '最高ランクに到達しています',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 11, color: context.cTextSub),
                   ),
                 ],
@@ -446,7 +533,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         color: context.cCardLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: nextTier.color.withValues(alpha: 0.2)),
+            color: nextTier.colorForContext(context).withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -454,11 +541,11 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: nextTier.color.withValues(alpha: 0.1),
+              color: nextTier.colorForContext(context).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(Icons.flag_outlined,
-                color: nextTier.color, size: 22),
+                color: nextTier.colorForContext(context), size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -467,7 +554,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
               children: [
                 Text(
                   '次の目標：${nextTier.label}',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                       fontSize: 10,
                       color: context.cTextSub,
                       letterSpacing: 0.5),
@@ -478,10 +565,10 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   children: [
                     Text(
                       next.toStringAsFixed(1),
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
-                        color: nextTier.color,
+                        color: nextTier.colorForContext(context),
                         letterSpacing: -1,
                         height: 1,
                       ),
@@ -489,7 +576,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 3, left: 4),
                       child: Text('kg',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                               fontSize: 13,
                               color: context.cTextSub)),
                     ),
@@ -502,21 +589,21 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: nextTier.color.withValues(alpha: 0.1),
+              color: nextTier.colorForContext(context).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
               children: [
                 Text(
                   '+${diff.toStringAsFixed(1)}',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppFonts.jetBrainsMono(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: nextTier.color,
+                    color: nextTier.colorForContext(context),
                   ),
                 ),
                 Text('kg 必要',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 9, color: context.cTextSub)),
               ],
             ),
@@ -540,7 +627,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           Text(
             'レベル別基準（体重 ${_bodyWeight.toStringAsFixed(0)}kg）',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 12),
@@ -554,12 +641,12 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: isCurrent
-                    ? t.color.withValues(alpha: 0.08)
+                    ? t.colorForContext(context).withValues(alpha: 0.08)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: isCurrent
-                      ? t.color.withValues(alpha: 0.25)
+                      ? t.colorForContext(context).withValues(alpha: 0.25)
                       : Colors.transparent,
                 ),
               ),
@@ -567,25 +654,25 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                 children: [
                   Icon(_tierIcon(t),
                       size: 16,
-                      color: isCurrent ? t.color : context.cTextSub),
+                      color: isCurrent ? t.colorForContext(context) : context.cTextSub),
                   const SizedBox(width: 10),
                   Text(
                     t.label,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
-                      color: isCurrent ? t.color : context.cTextSub,
+                      color: isCurrent ? t.colorForContext(context) : context.cTextSub,
                     ),
                   ),
                   const Spacer(),
                   Text(
                     '${threshold.toStringAsFixed(1)} kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 13,
                       fontWeight:
                           isCurrent ? FontWeight.w700 : FontWeight.w400,
-                      color: isCurrent ? t.color : context.cTextSub,
+                      color: isCurrent ? t.colorForContext(context) : context.cTextSub,
                     ),
                   ),
                   if (isCurrent) ...[
@@ -594,15 +681,15 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: t.color.withValues(alpha: 0.15),
+                        color: t.colorForContext(context).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         'NOW',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppFonts.jetBrainsMono(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
-                            color: t.color),
+                            color: t.colorForContext(context)),
                       ),
                     ),
                   ],
@@ -629,13 +716,13 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
         children: [
           Text(
             '強度分布ヒストグラム',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 10, color: context.cTextSub, letterSpacing: 1),
           ),
           const SizedBox(height: 4),
           Text(
             'ユーザーデータによる体重比分布',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
                 fontSize: 9,
                 color: context.cTextSub.withValues(alpha: 0.5)),
           ),
@@ -659,7 +746,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             const SizedBox(height: 10),
             Text(
               'Coming Soon',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: context.cTextSub.withValues(alpha: 0.4),
@@ -669,7 +756,7 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
             const SizedBox(height: 4),
             Text(
               'ユーザーデータ収集後に公開予定',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                   fontSize: 9,
                   color: context.cTextSub.withValues(alpha: 0.28)),
             ),
@@ -679,169 +766,46 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
     );
   }
 
-  // ── 1RM 推移グラフ ──────────────────────────────────────────
-  Widget _buildHistoryChart() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '1RM 推移',
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: context.cTextSub, letterSpacing: 1),
-          ),
-          const SizedBox(height: 16),
-          if (_history.length < 2)
-            Container(
-              height: 100,
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.show_chart,
-                      size: 32,
-                      color: context.cTextSub.withValues(alpha: 0.3)),
-                  const SizedBox(height: 8),
-                  Text(
-                    _history.isEmpty
-                        ? 'データが蓄積されるとグラフが表示されます'
-                        : 'あと ${2 - _history.length} 回記録するとグラフが表示されます',
-                    style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: context.cTextSub),
-                  ),
-                ],
-              ),
-            )
-          else
-            _buildLineChart(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLineChart() {
-    final spots = _history
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.oneRM))
-        .toList();
-
-    final minY = (_history.map((p) => p.oneRM).reduce((a, b) => a < b ? a : b) * 0.9)
-        .floorToDouble();
-    final maxY = (_history.map((p) => p.oneRM).reduce((a, b) => a > b ? a : b) * 1.1)
-        .ceilToDouble();
-
-    return SizedBox(
-      height: 160,
-      child: LineChart(
-        LineChartData(
-          minX: 0,
-          maxX: (_history.length - 1).toDouble(),
-          minY: minY,
-          maxY: maxY,
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) => FlLine(
-              color: Colors.white.withValues(alpha: 0.06),
-              strokeWidth: 1,
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 44,
-                getTitlesWidget: (v, _) => Text(
-                  '${v.toInt()}',
-                  style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9, color: context.cTextSub),
-                ),
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 24,
-                interval: _history.length <= 6
-                    ? 1
-                    : (_history.length / 4).ceilToDouble(),
-                getTitlesWidget: (v, _) {
-                  final idx = v.toInt();
-                  if (idx < 0 || idx >= _history.length) {
-                    return const SizedBox.shrink();
-                  }
-                  final parts = _history[idx].date.split('-');
-                  final label = '${parts[1]}/${parts[2]}';
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      label,
-                      style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9, color: context.cTextSub),
-                    ),
-                  );
-                },
-              ),
-            ),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              curveSmoothness: 0.35,
-              color: kPrimary,
-              barWidth: 2.5,
-              dotData: FlDotData(
-                show: true,
-                getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
-                  radius: 4,
-                  color: kPrimary,
-                  strokeWidth: 2,
-                  strokeColor: context.cCardLow,
-                ),
-              ),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  colors: [
-                    kPrimary.withValues(alpha: 0.18),
-                    kPrimary.withValues(alpha: 0.0),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ],
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => context.cCardHigh,
-              getTooltipItems: (spots) => spots
-                  .map((s) => LineTooltipItem(
-                        '${s.y.toStringAsFixed(1)}kg',
-                        GoogleFonts.jetBrainsMono(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: kPrimary,
-                        ),
-                      ))
-                  .toList(),
-            ),
-          ),
+  // ── 推移グラフ（1RM／体重比／総ボリュームを切り替え） ─────────
+  Widget _buildTrendChart() {
+    return TrendChartCard(
+      title: '推移',
+      leftReserved: 48,
+      series: [
+        TrendSeries(
+          label: '1RM',
+          points: [for (final p in _history) TrendPoint(p.dateTime, p.oneRM)],
+          color: kPrimary,
+          formatAxis: (v) => v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1),
+          formatTooltip: (v) => '${v.toStringAsFixed(1)}kg',
         ),
-      ),
+        TrendSeries(
+          label: '体重比',
+          subtitle: '1RM ÷ 体重（参考指標）',
+          points: [
+            for (final p in _history)
+              TrendPoint(p.dateTime,
+                  p.oneRM / (p.sessionBodyWeightKg ?? _bodyWeight)),
+          ],
+          color: kSecondary,
+          formatAxis: (v) => v.toStringAsFixed(2),
+          formatTooltip: (v) => '${v.toStringAsFixed(2)}x',
+        ),
+        TrendSeries(
+          label: 'ボリューム',
+          subtitle: '重量 × 回数 × セット数 (kg)',
+          points: [
+            for (final p in _volumeHistory)
+              TrendPoint(DateTime.parse(p.date), p.volume),
+          ],
+          color: kTertiary,
+          formatAxis: (v) =>
+              v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}t' : v.toStringAsFixed(0),
+          formatTooltip: (v) => v >= 1000
+              ? '${(v / 1000).toStringAsFixed(1)}t'
+              : '${v.toStringAsFixed(0)}kg',
+        ),
+      ],
     );
   }
 
@@ -856,9 +820,8 @@ class _ExerciseAnalysisScreenState extends State<ExerciseAnalysisScreen> {
   }
 }
 
-// 1RM 推移データ点
-class _RMPoint {
-  final String date; // 'YYYY-MM-DD'
-  final double oneRM;
-  const _RMPoint({required this.date, required this.oneRM});
+class _VolumePoint {
+  final String date;
+  final double volume;
+  const _VolumePoint({required this.date, required this.volume});
 }

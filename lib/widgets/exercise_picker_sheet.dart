@@ -1,7 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
+import '../services/auth_service.dart';
+import '../services/session_manager.dart';
 import '../services/user_preferences.dart';
 
 /// 部位別アコーディオン形式の種目選択ボトムシート。
@@ -9,8 +12,10 @@ import '../services/user_preferences.dart';
 class ExercisePickerSheet extends StatefulWidget {
   final void Function(Exercise) onSelected;
   final String title;
-  final Set<String> markedNames;   // チェックマーク表示 & タップ無効
-  final Widget? headerSlot;         // リスト上部に差し込む任意ウィジェット
+  final Set<String> markedNames;
+  final Widget? headerSlot;
+  final List<String> priorityNames;
+  final bool allowMarkedTap;
 
   const ExercisePickerSheet({
     super.key,
@@ -18,6 +23,8 @@ class ExercisePickerSheet extends StatefulWidget {
     this.title = '種目を選択',
     this.markedNames = const {},
     this.headerSlot,
+    this.priorityNames = const [],
+    this.allowMarkedTap = false,
   });
 
   @override
@@ -26,6 +33,19 @@ class ExercisePickerSheet extends StatefulWidget {
 
 class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   late List<Map<String, dynamic>> _exercises;
+  List<String> _favorites = [];
+  List<String> _exerciseOrder = [];
+  String _searchQuery = '';
+
+  /// 追加した種目の名前（編集・削除できるのはこれだけ。標準の種目は固定）
+  Set<String> _customNames = {};
+
+  /// 編集モード: 追加した種目に編集・削除ボタンを表示する
+  bool _editMode = false;
+  final _searchCtrl = TextEditingController();
+
+  // ExpansionTileの開閉状態をグループごとに管理（お気に入り操作で崩れないよう）
+  final Map<MuscleGroup, bool> _expanded = {};
 
   static const _groupOrder = [
     MuscleGroup.chest,
@@ -40,14 +60,262 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
   void initState() {
     super.initState();
     _exercises = List.from(defaultExercises);
-    _loadCustomExercises();
+    for (final g in _groupOrder) {
+      _expanded[g] = false;
+    }
+    _loadData();
   }
 
-  Future<void> _loadCustomExercises() async {
-    final custom = await UserPreferences.instance.getCustomExercises();
-    if (custom.isNotEmpty && mounted) {
-      setState(() => _exercises.addAll(custom));
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    final prefs = UserPreferences.instance;
+    final custom = await prefs.getCustomExercises();
+    final favs = await prefs.getFavoriteExercises();
+    final order = await prefs.getExerciseOrder();
+
+    // 別端末で追加・名前変更された種目は、記録にだけ名前が残る。
+    // 標準・追加分・削除済みのどれにも無い名前を、追加した種目として補う。
+    final known = <String>{
+      for (final e in defaultExercises) e['name'] as String,
+      for (final e in custom) e['name'] as String,
+      ...await prefs.getDeletedCustomExercises(),
+    };
+    try {
+      final sessions = await SessionManager.instance.getAllSessionsCached();
+      for (final s in sessions) {
+        for (final e in s.exercises) {
+          if (known.add(e.name)) {
+            custom.add({'name': e.name, 'group': e.muscleGroup});
+            await prefs.addCustomExercise(e.name, e.muscleGroup);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[Exercises] merge from records failed: $e');
     }
+
+    if (mounted) {
+      setState(() {
+        _exercises = List.from(defaultExercises)..addAll(custom);
+        _customNames = {for (final e in custom) e['name'] as String};
+        _favorites = favs;
+        _exerciseOrder = order;
+      });
+    }
+  }
+
+  /// 追加した種目の編集ダイアログ（名前・部位）。保存すると過去の記録も書き換える。
+  Future<void> _showEditExerciseDialog(String oldName, MuscleGroup oldGroup) async {
+    final nameCtrl = TextEditingController(text: oldName);
+    var group = oldGroup;
+    String? error;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: context.cCardLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('種目を編集',
+              style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                style: AppFonts.inter(color: context.cText),
+                decoration: InputDecoration(
+                  hintText: '種目名',
+                  errorText: error,
+                  hintStyle: AppFonts.inter(color: context.cTextSub),
+                  enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: context.cBorderSub)),
+                  focusedBorder:
+                      const UnderlineInputBorder(borderSide: BorderSide(color: kPrimary)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              InputDecorator(
+                decoration: InputDecoration(
+                  labelText: '部位',
+                  labelStyle: AppFonts.inter(color: context.cTextSub, fontSize: 12),
+                  enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: context.cBorderSub)),
+                ),
+                child: DropdownButton<MuscleGroup>(
+                  value: group,
+                  isExpanded: true,
+                  dropdownColor: context.cCardLow,
+                  underline: const SizedBox.shrink(),
+                  style: AppFonts.inter(color: context.cText, fontSize: 14),
+                  items: _groupOrder
+                      .map((g) => DropdownMenuItem(value: g, child: Text(g.label)))
+                      .toList(),
+                  onChanged: (g) => setDlg(() => group = g!),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('キャンセル', style: AppFonts.inter(color: context.cTextSub)),
+            ),
+            TextButton(
+              onPressed: () {
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) {
+                  setDlg(() => error = '種目名を入力してください');
+                } else if (name != oldName &&
+                    _exercises.any((e) => e['name'] == name)) {
+                  setDlg(() => error = '同じ名前の種目がすでにあります');
+                } else {
+                  Navigator.pop(ctx, true);
+                }
+              },
+              child: Text('保存',
+                  style: AppFonts.inter(color: kPrimary, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+    final newName = nameCtrl.text.trim();
+    nameCtrl.dispose();
+    if (saved != true || !mounted) return;
+    if (newName == oldName && group == oldGroup) return;
+
+    final sm = SessionManager.instance;
+    final count = await sm.countSessionsWithExercise(oldName);
+    if (!mounted) return;
+    if (count > 0) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: context.cCardLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('過去の記録も変更します',
+              style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+          content: Text(
+            '「$oldName」を含む過去の記録 $count 件の種目名・部位も、新しい内容に書き換えます。',
+            style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('キャンセル', style: AppFonts.inter(color: context.cTextSub)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('変更する',
+                  style: AppFonts.inter(color: kPrimary, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      await sm.renameExercise(oldName, newName, group);
+    }
+    await UserPreferences.instance.updateCustomExercise(oldName, newName, group);
+    if (newName != oldName) await _syncExerciseToFirestore(newName, group);
+    await _loadData();
+  }
+
+  /// 追加した種目を一覧から削除する（過去の記録は残る）。
+  Future<void> _confirmDeleteExercise(String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.cCardLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('種目を削除',
+            style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+        content: Text(
+          '「$name」を種目一覧から削除します。過去の記録はそのまま残ります。',
+          style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('キャンセル', style: AppFonts.inter(color: context.cTextSub)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('削除',
+                style: AppFonts.inter(
+                    color: Colors.red.shade400, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await UserPreferences.instance.removeCustomExercise(name);
+    await _loadData();
+  }
+
+  Future<void> _syncExerciseToFirestore(String name, MuscleGroup group) async {
+    final uid = AuthService.instance.currentUser?.uid;
+    if (uid == null || AuthService.instance.isAnonymous) return;
+    try {
+      final doc = FirebaseFirestore.instance.collection('exercises').doc(name);
+      final snap = await doc.get();
+      if (!snap.exists) {
+        await doc.set({
+          'name': name,
+          'group': group.name,
+          'createdBy': uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      debugPrint('[Exercises] Firestore sync failed: $e');
+    }
+  }
+
+  Future<void> _toggleFavorite(String name) async {
+    final updated = List<String>.from(_favorites);
+    if (updated.contains(name)) {
+      updated.remove(name);
+    } else {
+      updated.add(name);
+    }
+    await UserPreferences.instance.setFavoriteExercises(updated);
+    if (mounted) setState(() => _favorites = updated);
+  }
+
+  /// 部位内の並び替え結果をグローバルな表示順リストに反映する。
+  /// このリストは部位をまたいだ全種目のフラットな順序だが、表示時は
+  /// 部位でフィルタしてからこの順序でソートするため、他部位の並びには影響しない。
+  Future<void> _persistGroupOrder(List<String> namesInNewOrder) async {
+    final updated = List<String>.from(_exerciseOrder)
+      ..removeWhere((n) => namesInNewOrder.contains(n));
+    updated.addAll(namesInNewOrder);
+    setState(() => _exerciseOrder = updated);
+    await UserPreferences.instance.setExerciseOrder(updated);
+  }
+
+  Future<void> _persistFavoriteOrder(List<String> namesInNewOrder) async {
+    setState(() => _favorites = namesInNewOrder);
+    await UserPreferences.instance.setFavoriteExercises(namesInNewOrder);
+  }
+
+  /// items を _exerciseOrder の順序でソートする。未登録の種目は元の相対順序のまま末尾に続く。
+  List<Map<String, dynamic>> _sortByOrder(List<Map<String, dynamic>> items) {
+    final orderIndex = <String, int>{
+      for (int i = 0; i < _exerciseOrder.length; i++) _exerciseOrder[i]: i,
+    };
+    final sorted = List<Map<String, dynamic>>.from(items);
+    sorted.sort((a, b) {
+      final ai = orderIndex[a['name']] ?? (_exerciseOrder.length + items.indexOf(a));
+      final bi = orderIndex[b['name']] ?? (_exerciseOrder.length + items.indexOf(b));
+      return ai.compareTo(bi);
+    });
+    return sorted;
   }
 
   void _showAddExerciseDialog() {
@@ -60,17 +328,17 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
           backgroundColor: context.cCardLow,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('種目を追加',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
+              style: AppFonts.inter(fontWeight: FontWeight.w700, color: context.cText)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
                 autofocus: true,
-                style: GoogleFonts.inter(color: context.cText),
+                style: AppFonts.inter(color: context.cText),
                 decoration: InputDecoration(
                   hintText: '種目名',
-                  hintStyle: GoogleFonts.inter(color: context.cTextSub),
+                  hintStyle: AppFonts.inter(color: context.cTextSub),
                   enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: context.cBorderSub)),
                   focusedBorder: UnderlineInputBorder(
@@ -82,7 +350,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 decoration: InputDecoration(
                   labelText: '部位',
                   labelStyle:
-                      GoogleFonts.inter(color: context.cTextSub, fontSize: 12),
+                      AppFonts.inter(color: context.cTextSub, fontSize: 12),
                   enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: context.cBorderSub)),
                 ),
@@ -91,7 +359,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                   isExpanded: true,
                   dropdownColor: context.cCardLow,
                   underline: const SizedBox.shrink(),
-                  style: GoogleFonts.inter(color: context.cText, fontSize: 14),
+                  style: AppFonts.inter(color: context.cText, fontSize: 14),
                   items: _groupOrder
                       .map((g) => DropdownMenuItem(value: g, child: Text(g.label)))
                       .toList(),
@@ -104,20 +372,21 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('キャンセル',
-                  style: GoogleFonts.inter(color: context.cTextSub)),
+                  style: AppFonts.inter(color: context.cTextSub)),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 final name = nameCtrl.text.trim();
                 if (name.isNotEmpty) {
                   setState(() =>
                       _exercises.add({'name': name, 'group': selectedGroup}));
-                  UserPreferences.instance.addCustomExercise(name, selectedGroup);
-                  Navigator.pop(ctx);
+                  await UserPreferences.instance.addCustomExercise(name, selectedGroup);
+                  await _syncExerciseToFirestore(name, selectedGroup);
+                  if (ctx.mounted) Navigator.pop(ctx);
                 }
               },
               child: Text('追加',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                       color: kPrimary, fontWeight: FontWeight.w700)),
             ),
           ],
@@ -126,6 +395,136 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
     );
   }
 
+  Widget _buildExerciseItem(
+    String name,
+    MuscleGroup group, {
+    Key? key,
+    bool isPriority = false,
+    bool reorderable = false,
+    int? dragIndex,
+  }) {
+    final isMarked = widget.markedNames.contains(name);
+    final isFav = _favorites.contains(name);
+    final isCustom = _customNames.contains(name);
+    return GestureDetector(
+      key: key,
+      onTap: _editMode
+          ? (isCustom ? () => _showEditExerciseDialog(name, group) : null)
+          : (isMarked && !widget.allowMarkedTap)
+          ? null
+          : () {
+              Navigator.pop(context);
+              widget.onSelected(Exercise(name: name, muscleGroup: group));
+            },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: isPriority
+              ? (isMarked ? context.cCardHigh : context.cCard)
+              : (isMarked ? context.cCardHigh : context.cCardLow),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isPriority
+                ? kPrimary.withValues(alpha: 0.25)
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Row(
+          children: [
+            if (reorderable && dragIndex != null) ...[
+              ReorderableDragStartListener(
+                index: dragIndex,
+                child: Icon(Icons.drag_handle, size: 18, color: context.cBorder),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (isPriority) ...[
+              Icon(Icons.star, size: 14, color: kPrimary.withValues(alpha: 0.7)),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(
+                name,
+                style: AppFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isMarked ? context.cTextSub : context.cText,
+                ),
+              ),
+            ),
+            if (_editMode) ...[
+              if (isCustom) ...[
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showEditExerciseDialog(name, group),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Icon(Icons.edit_outlined, size: 18, color: kPrimary),
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _confirmDeleteExercise(name),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Icon(Icons.delete_outline,
+                        size: 18, color: Colors.red.shade400),
+                  ),
+                ),
+              ] else
+                Icon(Icons.lock_outline, size: 16, color: context.cBorder),
+            ] else ...[
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _toggleFavorite(name),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Icon(
+                  isFav ? Icons.star : Icons.star_border,
+                  size: 18,
+                  color: isFav ? const Color(0xFFFFB300) : context.cBorder,
+                ),
+              ),
+            ),
+            if (isMarked)
+              const Icon(Icons.check, color: kTertiary, size: 16)
+            else
+              Icon(Icons.chevron_right, color: context.cBorder, size: 18),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 検索結果はフラットリスト（並び替えなし）
+  Widget _buildSearchResults() {
+    final q = _searchQuery.toLowerCase();
+    final filtered = _exercises
+        .where((e) => (e['name'] as String).toLowerCase().contains(q))
+        .toList();
+    if (filtered.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: Text('該当する種目が見つかりません',
+              style: AppFonts.inter(fontSize: 13, color: context.cTextSub)),
+        ),
+      );
+    }
+    return Column(
+      children: filtered
+          .map((e) => _buildExerciseItem(
+                e['name'] as String,
+                e['group'] as MuscleGroup,
+                key: ValueKey('search_${e['name']}'),
+              ))
+          .toList(),
+    );
+  }
+
+  // 通常表示：部位別アコーディオン（部位内は並び替え可能）
   List<Widget> _buildGroupedItems() {
     final grouped = <MuscleGroup, List<Map<String, dynamic>>>{};
     for (final e in _exercises) {
@@ -135,15 +534,17 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
     return _groupOrder
         .where((g) => grouped.containsKey(g))
         .map((group) {
-          final items = grouped[group]!;
+          final items = _sortByOrder(grouped[group]!);
           return Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
-              initiallyExpanded: false,
+              key: PageStorageKey(group),
+              initiallyExpanded: _expanded[group] ?? false,
+              onExpansionChanged: (v) => _expanded[group] = v,
               tilePadding: const EdgeInsets.symmetric(horizontal: 4),
               title: Text(
                 group.label,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: kPrimary,
@@ -153,57 +554,88 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               iconColor: kPrimary,
               collapsedIconColor: context.cTextSub,
               childrenPadding: EdgeInsets.zero,
-              children: items.map((e) {
-                final name = e['name'] as String;
-                final isMarked = widget.markedNames.contains(name);
-                return GestureDetector(
-                  onTap: isMarked
-                      ? null
-                      : () {
-                          Navigator.pop(context);
-                          widget.onSelected(Exercise(
-                            name: name,
-                            muscleGroup: e['group'] as MuscleGroup,
-                          ));
-                        },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: isMarked
-                          ? context.cCardHigh
-                          : context.cCardLow,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.05)),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: isMarked ? context.cTextSub : context.cText,
-                            ),
-                          ),
-                        ),
-                        if (isMarked)
-                          const Icon(Icons.check, color: kTertiary, size: 16)
-                        else
-                          Icon(Icons.chevron_right,
-                              color: context.cBorder, size: 18),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+              children: [
+                ReorderableListView(
+                  // ExpansionTile 自体が PageStorageKey(group) で開閉状態(bool)を
+                  // 保存しているため、内側の ReorderableListView には別キーを
+                  // 与えてスクロール位置(double)の復元先を分離する
+                  // （同一キーだと型不一致でクラッシュする）。
+                  key: PageStorageKey('reorder_${group.name}'),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  onReorderItem: (oldIndex, newIndex) {
+                    final reordered = List<Map<String, dynamic>>.from(items);
+                    final moved = reordered.removeAt(oldIndex);
+                    reordered.insert(newIndex, moved);
+                    _persistGroupOrder(
+                        reordered.map((e) => e['name'] as String).toList());
+                  },
+                  children: [
+                    for (int i = 0; i < items.length; i++)
+                      _buildExerciseItem(
+                        items[i]['name'] as String,
+                        items[i]['group'] as MuscleGroup,
+                        key: ValueKey('group_${items[i]['name']}'),
+                        reorderable: true,
+                        dragIndex: i,
+                      ),
+                  ],
+                ),
+              ],
             ),
           );
         })
         .toList();
+  }
+
+  Widget _buildFavoritesSection() {
+    final favList =
+        _favorites.where((n) => _exercises.any((e) => e['name'] == n)).toList();
+    if (favList.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 6),
+          child: Text(
+            'お気に入り',
+            style: AppFonts.jetBrainsMono(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFFFB300),
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        ReorderableListView(
+          key: const PageStorageKey('reorder_favorites'),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          onReorderItem: (oldIndex, newIndex) {
+            final reordered = List<String>.from(favList);
+            final moved = reordered.removeAt(oldIndex);
+            reordered.insert(newIndex, moved);
+            _persistFavoriteOrder(reordered);
+          },
+          children: [
+            for (int i = 0; i < favList.length; i++)
+              _buildExerciseItem(
+                favList[i],
+                (_exercises.firstWhere(
+                  (e) => e['name'] == favList[i],
+                  orElse: () => {'group': MuscleGroup.chest},
+                )['group'] as MuscleGroup),
+                key: ValueKey('fav_${favList[i]}'),
+                reorderable: true,
+                dragIndex: i,
+              ),
+          ],
+        ),
+        Divider(height: 20, color: context.cCardHigh),
+      ],
+    );
   }
 
   @override
@@ -237,12 +669,32 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    widget.title,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: context.cText,
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: context.cText,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _editMode = !_editMode),
+                    icon: Icon(_editMode ? Icons.check : Icons.edit_outlined,
+                        size: 16, color: kPrimary),
+                    label: Text(
+                      _editMode ? '完了' : '種目を編集',
+                      style: AppFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: kPrimary,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                     ),
                   ),
                   TextButton.icon(
@@ -250,7 +702,7 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                     icon: const Icon(Icons.add, size: 16, color: kPrimary),
                     label: Text(
                       '種目を追加',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: kPrimary,
@@ -264,16 +716,82 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                 ],
               ),
             ),
+            // 検索バー
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _searchCtrl,
+                style: AppFonts.inter(fontSize: 14, color: context.cText),
+                onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                decoration: InputDecoration(
+                  hintText: '種目を検索...',
+                  hintStyle: AppFonts.inter(fontSize: 14, color: context.cTextSub),
+                  prefixIcon: Icon(Icons.search, size: 18, color: context.cTextSub),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            _searchCtrl.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                          child: Icon(Icons.close, size: 18, color: context.cTextSub),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: context.cCardLow,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
             if (widget.headerSlot != null) ...[
               widget.headerSlot!,
               Divider(height: 1, color: context.cCardHigh),
             ],
             Expanded(
-              child: ListView(
-                controller: ctrl,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                children: _buildGroupedItems(),
-              ),
+              child: _searchQuery.isNotEmpty
+                  ? SingleChildScrollView(
+                      controller: ctrl,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: _buildSearchResults(),
+                    )
+                  : ListView(
+                      controller: ctrl,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      children: [
+                        if (widget.priorityNames.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, bottom: 6),
+                            child: Text(
+                              'ルーチン種目',
+                              style: AppFonts.jetBrainsMono(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: kPrimary,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+                          ...widget.priorityNames.map((name) {
+                            final ex = _exercises.firstWhere(
+                              (e) => e['name'] == name,
+                              orElse: () => {'name': name, 'group': MuscleGroup.chest},
+                            );
+                            return _buildExerciseItem(
+                              name,
+                              ex['group'] as MuscleGroup,
+                              key: ValueKey('priority_$name'),
+                              isPriority: true,
+                            );
+                          }),
+                          Divider(height: 20, color: context.cCardHigh),
+                        ],
+                        _buildFavoritesSection(),
+                        ..._buildGroupedItems(),
+                      ],
+                    ),
             ),
           ],
         ),

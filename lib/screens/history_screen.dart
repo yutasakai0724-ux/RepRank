@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../models/workout.dart';
 import '../services/session_manager.dart';
 import '../utils/time_format.dart';
 import 'daily_detail_screen.dart';
+import '../widgets/exercise_picker_sheet.dart';
+import 'exercise_record_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -18,6 +20,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   DateTime? _selectedDay;
   String? _searchFilter;
   TextEditingController? _autocompleteController;
+  FocusNode? _autocompleteFocus;
 
   List<WorkoutSession> _sessions = [];
   bool _isLoading = true;
@@ -28,22 +31,64 @@ class _HistoryScreenState extends State<HistoryScreen> {
     _loadSessions();
   }
 
-  Future<void> _loadSessions() async {
-    final sessions = await SessionManager.instance.getAllSessions();
+  // 集計キャッシュ（_sessions / _searchFilter が変わったときだけ再計算）
+  final Map<int, List<WorkoutSession>> _byDay = {};
+  Set<int> _filteredDays = {};
+  int _streak = 0;
+  List<String> _recentExercises = [];
+  String? _indexedFilter;
+
+  int _dayKey(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
+
+  Future<void> _loadSessions({bool force = false}) async {
+    final sm = SessionManager.instance;
+    final sessions = force
+        ? await sm.getAllSessions()
+        : await sm.getAllSessionsCached();
     if (mounted) {
       setState(() {
         _sessions = sessions;
         _isLoading = false;
+        _rebuildIndex();
       });
     }
   }
 
+  void _rebuildIndex() {
+    _byDay.clear();
+    for (final s in _sessions) {
+      _byDay.putIfAbsent(_dayKey(s.date), () => []).add(s);
+    }
+    _recentExercises = _sessions
+        .expand((s) => s.exercises.map((e) => e.name))
+        .toSet()
+        .toList();
+
+    final today = DateTime.now();
+    var day = DateTime(today.year, today.month, today.day);
+    var streak = 0;
+    while (_byDay.containsKey(_dayKey(day))) {
+      streak++;
+      day = day.subtract(const Duration(days: 1));
+    }
+    _streak = streak;
+    _rebuildFilteredDays();
+  }
+
+  void _rebuildFilteredDays() {
+    _indexedFilter = _searchFilter;
+    final f = _searchFilter;
+    _filteredDays = {
+      for (final e in _byDay.entries)
+        if (f == null ||
+            e.value.any((s) => s.exercises.any((x) => x.name == f)))
+          e.key,
+    };
+  }
+
   bool _isWorkoutDay(DateTime day) {
-    return _sessions.any((s) {
-      if (!_isSameDay(s.date, day)) return false;
-      if (_searchFilter == null) return true;
-      return s.exercises.any((e) => e.name == _searchFilter);
-    });
+    if (_indexedFilter != _searchFilter) _rebuildFilteredDays();
+    return _filteredDays.contains(_dayKey(day));
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -53,9 +98,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // 現在表示月のセッション
   List<WorkoutSession> get _monthSessions {
-    return _sessions.where((s) =>
-        s.date.year == _focusedMonth.year &&
-        s.date.month == _focusedMonth.month).toList();
+    return _sessions
+        .where(
+          (s) =>
+              s.date.year == _focusedMonth.year &&
+              s.date.month == _focusedMonth.month,
+        )
+        .toList();
   }
 
   @override
@@ -67,7 +116,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         elevation: 0,
         title: Text(
           'WORKOUT',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: kPrimary,
@@ -81,7 +130,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           : RefreshIndicator(
               color: kPrimary,
               backgroundColor: context.cCardLow,
-              onRefresh: _loadSessions,
+              onRefresh: () => _loadSessions(force: true),
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
@@ -105,131 +154,141 @@ class _HistoryScreenState extends State<HistoryScreen> {
   // ── 検索バー ─────────────────────────────────────────────────────
   Widget _buildSearchBar() {
     // 最近記録された種目名（重複なし）
-    final recentExercises = _sessions
-        .expand((s) => s.exercises.map((e) => e.name))
-        .toSet()
-        .toList();
+    final recentExercises = _recentExercises;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Autocomplete<String>(
-          optionsBuilder: (TextEditingValue tv) {
-            if (tv.text.isEmpty) return recentExercises;
-            final q = tv.text;
-            return defaultExercises
-                .map((e) => e['name'] as String)
-                .where((name) => name.contains(q))
-                .take(8);
-          },
-          displayStringForOption: (s) => s,
-          onSelected: (String selection) {
-            setState(() => _searchFilter = selection);
-            Future.microtask(() => _autocompleteController?.clear());
-          },
-          fieldViewBuilder: (ctx, ctrl, focusNode, onSubmitted) {
-            _autocompleteController = ctrl;
-            return Container(
-              decoration: BoxDecoration(
-                color: context.cCard,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: ctrl,
-                focusNode: focusNode,
-                onSubmitted: (_) => onSubmitted(),
-                style: GoogleFonts.inter(fontSize: 14, color: context.cText),
-                decoration: InputDecoration(
-                  hintText: '種目を検索...',
-                  hintStyle:
-                      GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
-                  prefixIcon:
-                      Icon(Icons.search, color: context.cTextSub),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+        TapRegion(
+          onTapOutside: (_) => _autocompleteFocus?.unfocus(),
+          child: Autocomplete<String>(
+            optionsBuilder: (TextEditingValue tv) {
+              if (tv.text.isEmpty) return recentExercises;
+              final q = tv.text;
+              return defaultExercises
+                  .map((e) => e['name'] as String)
+                  .where((name) => name.contains(q))
+                  .take(8);
+            },
+            displayStringForOption: (s) => s,
+            onSelected: (String selection) {
+              setState(() => _searchFilter = selection);
+              Future.microtask(() {
+                _autocompleteController?.clear();
+                _autocompleteFocus?.unfocus();
+              });
+            },
+            fieldViewBuilder: (ctx, ctrl, focusNode, onSubmitted) {
+              _autocompleteController = ctrl;
+              _autocompleteFocus = focusNode;
+              return Container(
+                decoration: BoxDecoration(
+                  color: context.cCard,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            );
-          },
-          optionsViewBuilder: (ctx, onSelected, options) {
-            final isRecent = _autocompleteController?.text.isEmpty ?? true;
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4,
-                color: context.cCardLow,
-                borderRadius: BorderRadius.circular(12),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(ctx).size.width - 32,
-                    maxHeight: 220,
+                child: TextField(
+                  controller: ctrl,
+                  focusNode: focusNode,
+                  // 決定キーでは候補を自動選択しない（候補はタップで選ぶ）
+                  onSubmitted: (_) => focusNode.unfocus(),
+                  style: AppFonts.inter(fontSize: 14, color: context.cText),
+                  decoration: InputDecoration(
+                    hintText: '種目を検索...',
+                    hintStyle: AppFonts.inter(
+                      fontSize: 14,
+                      color: context.cTextSub,
+                    ),
+                    prefixIcon: Icon(Icons.search, color: context.cTextSub),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isRecent)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                          child: Text(
-                            '最近の記録',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 9,
-                              color: context.cTextSub,
-                              letterSpacing: 1.2,
+                ),
+              );
+            },
+            optionsViewBuilder: (ctx, onSelected, options) {
+              final isRecent = _autocompleteController?.text.isEmpty ?? true;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 4,
+                  color: context.cCardLow,
+                  borderRadius: BorderRadius.circular(12),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(ctx).size.width - 32,
+                      maxHeight: 220,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isRecent)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                            child: Text(
+                              '最近の記録',
+                              style: AppFonts.jetBrainsMono(
+                                fontSize: 9,
+                                color: context.cTextSub,
+                                letterSpacing: 1.2,
+                              ),
                             ),
                           ),
-                        ),
-                      Flexible(
-                        child: ListView.separated(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          itemCount: options.length,
-                          separatorBuilder: (_, _) =>
-                              const Divider(height: 1, color: Colors.white12),
-                          itemBuilder: (ctx2, i) {
-                            final option = options.elementAt(i);
-                            return InkWell(
-                              onTap: () => onSelected(option),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isRecent
-                                          ? Icons.history
-                                          : Icons.search,
-                                      size: 14,
-                                      color: context.cTextSub,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      option,
-                                      style: GoogleFonts.inter(
-                                          fontSize: 14, color: context.cText),
-                                    ),
-                                  ],
+                        Flexible(
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1, color: Colors.white12),
+                            itemBuilder: (ctx2, i) {
+                              final option = options.elementAt(i);
+                              return InkWell(
+                                onTap: () => onSelected(option),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isRecent ? Icons.history : Icons.search,
+                                        size: 14,
+                                        color: context.cTextSub,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        option,
+                                        style: AppFonts.inter(
+                                          fontSize: 14,
+                                          color: context.cText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
         if (_searchFilter != null) ...[
           const SizedBox(height: 8),
           InputChip(
             label: Text(
               _searchFilter!,
-              style: GoogleFonts.inter(fontSize: 12, color: kPrimary),
+              style: AppFonts.inter(fontSize: 12, color: kPrimary),
             ),
             backgroundColor: kPrimary.withValues(alpha: 0.12),
             side: BorderSide(color: kPrimary.withValues(alpha: 0.3)),
@@ -266,10 +325,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             children: [
               Text(
                 '$year年$month月',
-                style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: context.cText),
+                style: AppFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: context.cText,
+                ),
               ),
               const Spacer(),
               _calNavBtn(Icons.chevron_left, () {
@@ -285,10 +345,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Row(
             children: ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) {
               return Expanded(
-                child: Text(d,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: context.cTextSub)),
+                child: Text(
+                  d,
+                  textAlign: TextAlign.center,
+                  style: AppFonts.jetBrainsMono(
+                    fontSize: 11,
+                    color: context.cTextSub,
+                  ),
+                ),
               );
             }).toList(),
           ),
@@ -327,8 +391,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildDayCell(DateTime day) {
-    final isSelected =
-        _selectedDay != null && _isSameDay(_selectedDay!, day);
+    final isSelected = _selectedDay != null && _isSameDay(_selectedDay!, day);
     final isToday = _isToday(day);
     final hasWorkout = _isWorkoutDay(day);
 
@@ -346,13 +409,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     return GestureDetector(
-      onTap: () {
-        setState(() => _selectedDay = day);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DailyDetailScreen(date: day)),
-        ).then((_) => _loadSessions()); // 戻ったらリフレッシュ
-      },
+      onTap: () => setState(() => _selectedDay = day),
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
@@ -365,10 +422,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
           children: [
             Text(
               '${day.day}',
-              style: GoogleFonts.jetBrainsMono(
+              style: AppFonts.jetBrainsMono(
                 fontSize: 12,
-                fontWeight:
-                    (isSelected || isToday) ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: (isSelected || isToday)
+                    ? FontWeight.w700
+                    : FontWeight.w400,
                 color: textColor,
               ),
             ),
@@ -399,13 +457,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
       children: [
         Text(
           '${day.month}月${day.day}日($weekday)',
-          style: GoogleFonts.inter(
-              fontSize: 16, fontWeight: FontWeight.w700, color: context.cText),
+          style: AppFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
         ),
         Text(
           '継続日数: $streak 日',
-          style: GoogleFonts.jetBrainsMono(
-              fontSize: 11, color: kPrimary, letterSpacing: 1),
+          style: AppFonts.jetBrainsMono(
+            fontSize: 11,
+            color: kPrimary,
+            letterSpacing: 1,
+          ),
         ),
       ],
     );
@@ -413,106 +477,139 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   List<Widget> _buildSessionCards() {
     final day = _selectedDay ?? DateTime.now();
-    final daySessions = _sessions.where((s) {
-      if (!_isSameDay(s.date, day)) return false;
-      if (_searchFilter == null) return true;
-      return s.exercises.any((e) => e.name == _searchFilter);
-    }).toList();
+    final daySessions = (_byDay[_dayKey(day)] ?? const <WorkoutSession>[])
+        .where((s) {
+          if (_searchFilter == null) return true;
+          return s.exercises.any((e) => e.name == _searchFilter);
+        })
+        .toList();
 
     if (daySessions.isEmpty) {
+      // 記録がない日: 目立たない「この日の記録を追加」ボタンを出す
       return [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: Center(
-            child: Text(
-              'この日のトレーニング記録はありません',
-              style:
-                  GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
+            child: TextButton.icon(
+              onPressed: () => _addRecordToDay(day),
+              icon: Icon(Icons.add, size: 16, color: context.cTextSub),
+              label: Text(
+                'この日の記録を追加',
+                style: AppFonts.inter(fontSize: 13, color: context.cTextSub),
+              ),
             ),
           ),
         ),
       ];
     }
 
-    return [
-      for (final s in daySessions) ...[
-        Dismissible(
-          key: ValueKey(s.id),
-          direction: DismissDirection.endToStart,
-          confirmDismiss: (_) => _confirmDelete(s),
-          onDismissed: (_) async {
-            await SessionManager.instance.deleteSession(s.id);
-            _loadSessions();
-          },
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            decoration: BoxDecoration(
-              color: Colors.red.shade900,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.delete_outline, color: Colors.white, size: 24),
-                SizedBox(height: 4),
-                Text('削除', style: TextStyle(color: Colors.white, fontSize: 11)),
-              ],
-            ),
-          ),
-          child: _sessionCard(s),
-        ),
-        const SizedBox(height: 10),
-      ],
-    ];
+    return [_dayCard(day, daySessions)];
   }
 
-  Future<bool?> _confirmDelete(WorkoutSession session) {
-    return showDialog<bool>(
+  /// 記録のない日に種目を選んで記録を追加する（セッションは入力・保存時に作成される）。
+  void _addRecordToDay(DateTime day) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => ExercisePickerSheet(
+        onSelected: (exercise) async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ExerciseRecordScreen(exercise: exercise, targetDate: day),
+            ),
+          );
+          _loadSessions();
+        },
+      ),
+    );
+  }
+
+  /// カード長押し: その日の記録をまとめて削除する（確認ダイアログあり）。
+  Future<void> _confirmDeleteDay(
+    DateTime day,
+    List<WorkoutSession> sessions,
+  ) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '記録を削除',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: context.cText),
+          style: AppFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: context.cText,
+          ),
         ),
         content: Text(
-          '${session.sessionName ?? '記録'}を削除しますか？\nこの操作は元に戻せません。',
-          style: GoogleFonts.inter(fontSize: 14, color: context.cTextSub),
+          '${day.month}月${day.day}日の記録（${sessions.length}件）を削除しますか？\nこの操作は元に戻せません。',
+          style: AppFonts.inter(fontSize: 14, color: context.cTextSub),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+            child: Text(
+              'キャンセル',
+              style: AppFonts.inter(color: context.cTextSub),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('削除',
-                style: GoogleFonts.inter(
-                    color: Colors.red.shade400, fontWeight: FontWeight.w700)),
+            child: Text(
+              '削除',
+              style: AppFonts.inter(
+                color: Colors.red.shade400,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
     );
+    if (ok != true) return;
+    for (final s in sessions) {
+      await SessionManager.instance.deleteSession(s.id);
+    }
+    _loadSessions();
   }
 
-  Widget _sessionCard(WorkoutSession session) {
-    final volume = session.totalVolume;
-    final duration = session.finishedAt?.difference(session.startedAt);
-    final startLabel = formatHM(session.startedAt);
-    final hasRoutine = session.routineName != null;
+  /// その日の記録を1枚のカードに統合して表示する。
+  /// カード全体のタップで日別記録一覧画面へ、種目行のタップでその種目の記録画面へ遷移する。
+  Widget _dayCard(DateTime day, List<WorkoutSession> sessions) {
+    final volume = sessions.fold(0.0, (s, e) => s + e.totalVolume);
+    // トレーニング時間: 記録のある記録（セッション）の合計
+    final durations =
+        sessions.map((s) => s.trainingDuration).whereType<Duration>();
+    final duration = durations.isEmpty
+        ? null
+        : durations.fold(Duration.zero, (a, b) => a + b);
+    final earliest = sessions
+        .map((s) => s.startedAt)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+    final startLabel = formatHM(earliest);
+    final hasRoutine = sessions.any((s) => s.routineName != null);
     final iconColor = hasRoutine ? kPrimary : kTertiary;
-    final exerciseNames =
-        session.exercises.map((e) => e.name).join(', ');
+    final names = sessions
+        .map((s) => s.sessionName)
+        .whereType<String>()
+        .toSet()
+        .join('・');
+    final title = names.isEmpty ? '記録' : names;
+    final rows = [
+      for (final s in sessions)
+        for (final e in s.exercises) (session: s, exercise: e),
+    ];
+    final exerciseNames = rows.map((r) => r.exercise.name).join(', ');
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => _confirmDeleteDay(day, sessions),
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => DailyDetailScreen(date: session.date),
-        ),
+        MaterialPageRoute(builder: (_) => DailyDetailScreen(date: day)),
       ).then((_) => _loadSessions()),
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -521,75 +618,147 @@ class _HistoryScreenState extends State<HistoryScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
         ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.fitness_center, color: iconColor, size: 26),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            title,
+                            style: AppFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: context.cText,
+                            ),
+                          ),
+                          Text(
+                            startLabel,
+                            style: AppFonts.jetBrainsMono(
+                              fontSize: 10,
+                              color: context.cTextSub,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        exerciseNames,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppFonts.inter(
+                          fontSize: 12,
+                          color: context.cTextSub,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.trending_up, size: 13, color: kTertiary),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${volume.toStringAsFixed(0)} kg',
+                            style: AppFonts.jetBrainsMono(
+                              fontSize: 11,
+                              color: context.cText,
+                            ),
+                          ),
+                          if (duration != null) ...[
+                            const SizedBox(width: 14),
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 13,
+                              color: kSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${duration.inMinutes} 分',
+                              style: AppFonts.jetBrainsMono(
+                                fontSize: 11,
+                                color: context.cText,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (rows.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Divider(height: 1, color: context.cCardHigh),
+              const SizedBox(height: 6),
+              for (final r in rows) _exerciseRow(r.session, r.exercise),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 種目1行。タップでその種目の記録画面へ遷移する。
+  Widget _exerciseRow(WorkoutSession session, Exercise e) {
+    final best = e.sets.isEmpty
+        ? 0.0
+        : e.sets.map((s) => s.oneRM).reduce((a, b) => a > b ? a : b);
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ExerciseRecordScreen(exercise: e, sessionId: session.id),
+        ),
+      ).then((_) => _loadSessions()),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         child: Row(
           children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.fitness_center, color: iconColor, size: 26),
-            ),
-            const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        session.sessionName ?? '記録',
-                        style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: context.cText),
-                      ),
-                      Text(
-                        startLabel,
-                        style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10, color: context.cTextSub),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    exerciseNames,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                        fontSize: 12, color: context.cTextSub),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Icons.trending_up, size: 13, color: kTertiary),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${volume.toStringAsFixed(0)} kg',
-                        style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11, color: context.cText),
-                      ),
-                      if (duration != null) ...[
-                        const SizedBox(width: 14),
-                        Icon(Icons.timer_outlined,
-                            size: 13, color: kSecondary),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${duration.inMinutes} 分',
-                          style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11, color: context.cText),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+              child: Text(
+                e.name,
+                style: AppFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: context.cText,
+                ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, color: context.cBorder, size: 20),
+            Text(
+              '${e.sets.length}セット',
+              style: AppFonts.jetBrainsMono(
+                fontSize: 11,
+                color: context.cTextSub,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '${best.toStringAsFixed(1)}kg',
+              style: AppFonts.jetBrainsMono(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: kPrimaryLight,
+              ),
+            ),
+            Icon(Icons.chevron_right, color: context.cBorder, size: 18),
           ],
         ),
       ),
@@ -611,7 +780,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       children: [
         Text(
           'MONTHLY OVERVIEW',
-          style: GoogleFonts.jetBrainsMono(
+          style: AppFonts.jetBrainsMono(
             fontSize: 10,
             color: context.cTextSub,
             letterSpacing: 1.2,
@@ -674,22 +843,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   /// 連続日数を計算（今日から遡って連続してワークアウトがある日数）
-  int _calcStreak() {
-    final workoutDates = _sessions.map((s) {
-      final d = s.date;
-      return DateTime(d.year, d.month, d.day);
-    }).toSet();
-
-    int streak = 0;
-    DateTime day = DateTime.now();
-    day = DateTime(day.year, day.month, day.day);
-
-    while (workoutDates.contains(day)) {
-      streak++;
-      day = day.subtract(const Duration(days: 1));
-    }
-    return streak;
-  }
+  int _calcStreak() => _streak;
 
   Widget _statCard({
     required String label,
@@ -708,26 +862,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: GoogleFonts.jetBrainsMono(
-                  fontSize: 9,
-                  color: context.cTextSub,
-                  letterSpacing: 0.8)),
+          Text(
+            label,
+            style: AppFonts.jetBrainsMono(
+              fontSize: 9,
+              color: context.cTextSub,
+              letterSpacing: 0.8,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value,
-              style: GoogleFonts.jetBrainsMono(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: valueColor)),
+          Text(
+            value,
+            style: AppFonts.jetBrainsMono(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: valueColor,
+            ),
+          ),
           if (sub != null) ...[
             const SizedBox(height: 2),
             Row(
               children: [
                 Icon(Icons.trending_up, size: 11, color: subColor),
                 const SizedBox(width: 2),
-                Text(sub,
-                    style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9, color: subColor)),
+                Text(
+                  sub,
+                  style: AppFonts.jetBrainsMono(fontSize: 9, color: subColor),
+                ),
               ],
             ),
           ],

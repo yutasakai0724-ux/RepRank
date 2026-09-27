@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import '../theme.dart';
 import '../services/auth_service.dart';
 
@@ -57,6 +57,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (user != null && mounted) Navigator.of(context).pop();
     } on FirebaseAuthException catch (e) {
       if (mounted) setState(() => _errorMsg = AuthService.errorMessage(e));
+    } catch (e) {
+      if (mounted) setState(() => _errorMsg = 'Google エラー: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -85,7 +87,7 @@ class _AuthScreenState extends State<AuthScreen> {
         elevation: 0,
         title: Text(
           _isLogin ? 'ログイン' : 'アカウント作成',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
               fontSize: 18, fontWeight: FontWeight.w700, color: kPrimary),
         ),
       ),
@@ -113,7 +115,7 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 12),
               Center(
                 child: Text('Rep Rank',
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                         color: kPrimary)),
@@ -123,7 +125,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Text(
                   'ログインするとデータをクラウドに\nバックアップ・同期できます',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                       fontSize: 13, color: context.cTextSub, height: 1.5),
                 ),
               ),
@@ -151,7 +153,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text('または',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 12, color: context.cTextSub)),
                 ),
                 Expanded(child: Divider(color: context.cCardHigh)),
@@ -185,7 +187,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: GestureDetector(
                     onTap: _showPasswordReset,
                     child: Text('パスワードを忘れた方',
-                        style: GoogleFonts.inter(
+                        style: AppFonts.inter(
                             fontSize: 12, color: kPrimary)),
                   ),
                 ),
@@ -202,7 +204,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         color: Colors.red.withValues(alpha: 0.3)),
                   ),
                   child: Text(_errorMsg!,
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 13, color: Colors.red.shade300)),
                 ),
               ],
@@ -231,7 +233,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         child: Center(
                           child: Text(
                             _isLogin ? 'ログイン' : 'アカウントを作成',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white),
@@ -248,7 +250,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 children: [
                   Text(
                     _isLogin ? 'アカウントをお持ちでない方は' : 'すでにアカウントをお持ちの方は',
-                    style: GoogleFonts.inter(
+                    style: AppFonts.inter(
                         fontSize: 13, color: context.cTextSub),
                   ),
                   GestureDetector(
@@ -258,7 +260,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     }),
                     child: Text(
                       _isLogin ? '新規登録' : 'ログイン',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: kPrimary),
@@ -295,7 +297,7 @@ class _AuthScreenState extends State<AuthScreen> {
             Icon(icon, color: fg, size: 22),
             const SizedBox(width: 10),
             Text(label,
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: fg)),
@@ -316,11 +318,11 @@ class _AuthScreenState extends State<AuthScreen> {
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscure,
-      style: GoogleFonts.inter(fontSize: 14, color: context.cText),
+      style: AppFonts.inter(fontSize: 14, color: context.cText),
       decoration: InputDecoration(
         labelText: label,
         labelStyle:
-            GoogleFonts.inter(fontSize: 13, color: context.cTextSub),
+            AppFonts.inter(fontSize: 13, color: context.cTextSub),
         filled: true,
         fillColor: context.cCardLow,
         contentPadding:
@@ -347,23 +349,23 @@ class _AuthScreenState extends State<AuthScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.cCardLow,
         title: Text('パスワードリセット',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.emailAddress,
-          style: GoogleFonts.inter(color: context.cText),
+          style: AppFonts.inter(color: context.cText),
           decoration: InputDecoration(
             labelText: 'メールアドレス',
             labelStyle:
-                GoogleFonts.inter(color: context.cTextSub),
+                AppFonts.inter(color: context.cTextSub),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text('キャンセル',
-                style: GoogleFonts.inter(color: context.cTextSub)),
+                style: AppFonts.inter(color: context.cTextSub)),
           ),
           TextButton(
             onPressed: () async {
@@ -377,7 +379,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('リセットメールを送信しました',
-                        style: GoogleFonts.inter(color: Colors.white)),
+                        style: AppFonts.inter(color: Colors.white)),
                     backgroundColor: context.cCardHigh,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -385,7 +387,7 @@ class _AuthScreenState extends State<AuthScreen> {
               }
             },
             child: Text('送信',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],

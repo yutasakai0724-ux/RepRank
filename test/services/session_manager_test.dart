@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:RepRank/models/workout.dart';
 import 'package:RepRank/repositories/workout_repository.dart';
 import 'package:RepRank/services/session_manager.dart';
@@ -42,29 +43,32 @@ void _resetManager(_MockRepo repo) {
 }
 
 void main() {
+  renameTests();
+  previousRecordTests();
   late _MockRepo repo;
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     repo = _MockRepo();
     _resetManager(repo);
   });
 
   // ── getOrCreate ─────────────────────────────────────────────────
   group('getOrCreate', () {
-    test('creates new session when none exists', () {
-      final session = SessionManager.instance.getOrCreate();
+    test('creates new session when none exists', () async {
+      final session = await SessionManager.instance.getOrCreate();
       expect(session, isNotNull);
       expect(session.id, isNotEmpty);
     });
 
-    test('returns same session on repeated calls', () {
-      final a = SessionManager.instance.getOrCreate();
-      final b = SessionManager.instance.getOrCreate();
+    test('returns same session on repeated calls', () async {
+      final a = await SessionManager.instance.getOrCreate();
+      final b = await SessionManager.instance.getOrCreate();
       expect(a.id, equals(b.id));
     });
 
-    test('stores sessionName and routineName', () {
-      final session = SessionManager.instance.getOrCreate(
+    test('stores sessionName and routineName', () async {
+      final session = await SessionManager.instance.getOrCreate(
         sessionName: '胸の日',
         routineName: '胸の日',
       );
@@ -133,7 +137,7 @@ void main() {
     });
 
     test('sets finishedAt and clears active session', () async {
-      SessionManager.instance.getOrCreate();
+      await SessionManager.instance.getOrCreate();
       await SessionManager.instance.saveExercise(
         Exercise(name: 'デッドリフト', muscleGroup: MuscleGroup.back),
       );
@@ -158,7 +162,7 @@ void main() {
     });
 
     test('persists session to DB after finish', () async {
-      SessionManager.instance.getOrCreate(sessionName: 'テスト');
+      await SessionManager.instance.getOrCreate(sessionName: 'テスト');
       await SessionManager.instance.finish();
 
       final sessions = await repo.getAllSessions();
@@ -257,5 +261,87 @@ void main() {
       final afterDelete = await repo.getAllSessions();
       expect(afterDelete.length, 0);
     });
+  });
+}
+
+// ── renameExercise / 追加種目の編集 ─────────────────────────────
+void renameTests() {
+  group('renameExercise', () {
+    test('名前と部位を全記録で書き換え、他の種目は変えない', () async {
+      SharedPreferences.setMockInitialValues({});
+      final repo = _MockRepo();
+      SessionManager.instance.reset();
+      SessionManager.instance.init(repo);
+      for (final d in [3, 10]) {
+        await repo.upsertSession(WorkoutSession(
+          date: DateTime.now().subtract(Duration(days: d)),
+          startedAt: DateTime.now().subtract(Duration(days: d)),
+          exercises: [
+            Exercise(name: '独自種目', muscleGroup: MuscleGroup.chest),
+            Exercise(name: 'スクワット', muscleGroup: MuscleGroup.legs),
+          ],
+        ));
+      }
+      expect(await SessionManager.instance.countSessionsWithExercise('独自種目'), 2);
+      final n = await SessionManager.instance
+          .renameExercise('独自種目', '新名称', MuscleGroup.back);
+      expect(n, 2);
+      final all = await repo.getAllSessions();
+      for (final s in all) {
+        expect(s.exercises.any((e) => e.name == '独自種目'), isFalse);
+        final e = s.exercises.firstWhere((e) => e.name == '新名称');
+        expect(e.muscleGroup, MuscleGroup.back);
+        expect(s.exercises.firstWhere((e) => e.name == 'スクワット').muscleGroup,
+            MuscleGroup.legs);
+        expect(s.updatedAt, isNotNull);
+      }
+    });
+  });
+}
+
+// ── getPreviousExerciseRecord（過去記録の編集では、その日より前を「前回」にする）──
+void previousRecordTests() {
+  test('過去の記録を編集するとき、それより新しい記録は「前回」にならない', () async {
+    SharedPreferences.setMockInitialValues({});
+    final repo = _MockRepo();
+    SessionManager.instance.reset();
+    SessionManager.instance.init(repo);
+    WorkoutSession mk(int daysAgo, double w) => WorkoutSession(
+          date: DateTime.now().subtract(Duration(days: daysAgo)),
+          startedAt: DateTime.now().subtract(Duration(days: daysAgo)),
+          exercises: [
+            Exercise(
+              name: 'ベンチプレス',
+              muscleGroup: MuscleGroup.chest,
+              sets: [WorkoutSet(setNumber: 1, weight: w, reps: 5)],
+            ),
+          ],
+        );
+    final d10 = mk(10, 60), d5 = mk(5, 70), d0 = mk(0, 80);
+    for (final s in [d10, d5, d0]) {
+      await repo.upsertSession(s);
+    }
+
+    // 5日前の記録を編集中 → 前回は10日前
+    final prev = await SessionManager.instance
+        .getPreviousExerciseRecord('ベンチプレス', excludeSessionId: d5.id);
+    expect(prev?.sessionId, d10.id);
+
+    // 最古の記録を編集中 → 前回なし
+    final none = await SessionManager.instance
+        .getPreviousExerciseRecord('ベンチプレス', excludeSessionId: d10.id);
+    expect(none, isNull);
+
+    // 新規記録（基準なし）→ 一番新しい記録
+    final latest = await SessionManager.instance
+        .getPreviousExerciseRecord('ベンチプレス');
+    expect(latest?.sessionId, d0.id);
+
+    // 日付を指定した新規記録 → その日より前
+    final before = await SessionManager.instance.getPreviousExerciseRecord(
+      'ベンチプレス',
+      beforeDate: DateTime.now().subtract(const Duration(days: 7)),
+    );
+    expect(before?.sessionId, d10.id);
   });
 }

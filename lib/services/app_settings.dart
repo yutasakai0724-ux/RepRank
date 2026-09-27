@@ -35,4 +35,15 @@ class AppSettings extends ChangeNotifier {
     await prefs.setDouble(_keyTextScale, scale);
     notifyListeners();
   }
+
+  // プレビュー専用（SharedPreferences には保存しない）
+  void previewThemeMode(ThemeMode mode) {
+    _themeMode = mode;
+    notifyListeners();
+  }
+
+  void previewTextScale(double scale) {
+    _textScale = scale;
+    notifyListeners();
+  }
 }

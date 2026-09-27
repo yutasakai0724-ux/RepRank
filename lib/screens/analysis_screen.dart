@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../utils/app_fonts.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../theme.dart';
+import '../widgets/trend_chart_card.dart';
 import '../models/workout.dart';
 import '../data/strength_standards.dart';
 import '../services/ad_service.dart';
 import '../services/session_manager.dart';
 import '../services/stopwatch_service.dart';
+import '../services/training_time_service.dart';
 import '../services/user_preferences.dart';
 import '../utils/time_format.dart';
 import 'exercise_analysis_screen.dart';
@@ -28,7 +30,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   // ── ワークアウトストップウォッチ ──────────────────────
   Timer? _stopwatchTimer;
-  Duration _elapsed = Duration.zero;
+  final ValueNotifier<Duration> _elapsedNotifier =
+      ValueNotifier<Duration>(Duration.zero);
   late final AnimationController _pulseController;
 
   // ── リワード広告 ───────────────────────────────────────
@@ -39,6 +42,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   void initState() {
     super.initState();
     _loadData();
+    SessionManager.instance.addListener(_onSessionChanged);
+    StopwatchService.instance.addListener(_onStopwatchChanged);
     _startStopwatchTick();
     _pulseController = AnimationController(
       vsync: this,
@@ -47,9 +52,27 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     _loadRewardedAd();
   }
 
+  /// 通知の「リセット」など画面外での操作にも追従する
+  void _onStopwatchChanged() {
+    if (mounted) _updateElapsed();
+  }
+
+  Timer? _sessionReloadDebounce;
+
+  // 入力中は保存が頻発するため、再読み込みはまとめて1回にする
+  void _onSessionChanged() {
+    _sessionReloadDebounce?.cancel();
+    _sessionReloadDebounce =
+        Timer(const Duration(milliseconds: 500), _loadData);
+  }
+
   @override
   void dispose() {
+    SessionManager.instance.removeListener(_onSessionChanged);
+    StopwatchService.instance.removeListener(_onStopwatchChanged);
     _stopwatchTimer?.cancel();
+    _sessionReloadDebounce?.cancel();
+    _elapsedNotifier.dispose();
     _pulseController.dispose();
     _rewardedAd?.dispose();
     super.dispose();
@@ -99,20 +122,20 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   void _startStopwatchTick() {
-    _updateElapsed();
+    _elapsedNotifier.value = StopwatchService.instance.elapsed;
     _stopwatchTimer?.cancel();
+    // 毎秒 setState すると画面全体が再構築されるため、経過時間の表示部分だけ更新する
     _stopwatchTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateElapsed();
+      _elapsedNotifier.value = StopwatchService.instance.elapsed;
     });
   }
 
+  /// START/STOP/RESET 押下時：ボタンの状態も変わるので画面全体を更新する
   void _updateElapsed() {
     if (!mounted) return;
-    setState(() {
-      _elapsed = StopwatchService.instance.elapsed;
-    });
+    _elapsedNotifier.value = StopwatchService.instance.elapsed;
+    setState(() {});
   }
-
 
   Future<void> _loadData() async {
     final sessions = await SessionManager.instance.getAllSessions();
@@ -124,12 +147,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         _bodyWeight = weight;
         _gender = gender;
         _isLoading = false;
+        _recompute();
       });
     }
   }
 
   // 全セッション + アクティブセッションから種目ごとの最高1RMを返す
-  List<_ExerciseSummary> get _summaries {
+  // ── 計算結果のキャッシュ（データ更新時のみ再計算）─────────────────
+  List<_ExerciseSummary> _summariesCache = [];
+
+  List<_ExerciseSummary> get _summaries => _summariesCache;
+
+  void _recompute() {
+    _summariesCache = _computeSummaries();
+    _bodyWeightCache = _computeBodyWeightHistory();
+  }
+
+  List<_ExerciseSummary> _computeSummaries() {
     final allExercises = <Exercise>[
       ..._allSessions.expand((s) => s.exercises),
     ];
@@ -159,29 +193,25 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return best.values.toList()..sort((a, b) => b.maxRM.compareTo(a.maxRM));
   }
 
-  // 最も次のレベルに近い種目
-  _ExerciseSummary? get _closestToNextLevel {
-    final list =
-        _summaries.where((s) => s.result.nextThreshold != null).toList();
-    if (list.isEmpty) return null;
-    list.sort((a, b) {
-      final ra =
-          (a.result.nextThreshold! - a.maxRM) / a.result.nextThreshold!;
-      final rb =
-          (b.result.nextThreshold! - b.maxRM) / b.result.nextThreshold!;
-      return ra.compareTo(rb);
-    });
-    return list.first;
-  }
+  // 体重推移（日付ごと、記録が入力された日の体重値を使用）
+  List<({String date, double weight})> _bodyWeightCache = const [];
+  List<({String date, double weight})> get _bodyWeightHistory => _bodyWeightCache;
 
-  // 部位カバレッジ
-  Set<MuscleGroup> get _coveredGroups {
-    final exercises = <Exercise>[
-      ..._allSessions.expand((s) => s.exercises),
+  List<({String date, double weight})> _computeBodyWeightHistory() {
+    final Map<String, double> byDate = {};
+    final allSessions = [
+      ..._allSessions,
+      if (SessionManager.instance.active != null)
+        SessionManager.instance.active!,
     ];
-    final active = SessionManager.instance.active;
-    if (active != null) exercises.addAll(active.exercises);
-    return exercises.map((e) => e.muscleGroup).toSet();
+    for (final s in allSessions) {
+      if (s.bodyWeightKg == null || s.exercises.isEmpty) continue;
+      final key = formatYMD(s.date);
+      byDate[key] = s.bodyWeightKg!;
+    }
+    final list = byDate.entries.map((e) => (date: e.key, weight: e.value)).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return list;
   }
 
   void _editBodyWeight() {
@@ -192,16 +222,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         backgroundColor: context.cCardLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('体重を設定',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
                 fontWeight: FontWeight.w700, color: context.cText)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: GoogleFonts.inter(color: context.cText),
+          style: AppFonts.inter(color: context.cText),
           decoration: InputDecoration(
             suffixText: 'kg',
-            suffixStyle: GoogleFonts.jetBrainsMono(color: context.cTextSub),
+            suffixStyle: AppFonts.jetBrainsMono(color: context.cTextSub),
             enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: context.cBorderSub)),
             focusedBorder: UnderlineInputBorder(
@@ -212,18 +242,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('キャンセル',
-                  style: GoogleFonts.inter(color: context.cTextSub))),
+                  style: AppFonts.inter(color: context.cTextSub))),
           TextButton(
             onPressed: () async {
               final v = double.tryParse(ctrl.text);
               if (v != null && v > 0) {
                 await UserPreferences.instance.setBodyWeight(v);
-                if (mounted) setState(() => _bodyWeight = v);
+                if (mounted) {
+                  setState(() {
+                    _bodyWeight = v;
+                    _recompute();
+                  });
+                }
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text('保存',
-                style: GoogleFonts.inter(
+                style: AppFonts.inter(
                     color: kPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -242,7 +277,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         elevation: 0,
         title: Text(
           'REP RANK',
-          style: GoogleFonts.inter(
+          style: AppFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w900,
             color: kPrimary,
@@ -260,13 +295,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 children: [
                   Text(
                     '${_bodyWeight.toStringAsFixed(0)}kg',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: context.cText),
                   ),
                   Text('体重 ✎',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppFonts.jetBrainsMono(
                           fontSize: 9, color: context.cTextSub)),
                 ],
               ),
@@ -284,23 +319,40 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 if (summaries.isEmpty)
                   _buildEmptyInline()
                 else ...[
-                  _buildOverallCard(summaries),
-                  const SizedBox(height: 16),
-                  _buildMuscleCoverage(),
-                  const SizedBox(height: 16),
-                  if (_closestToNextLevel != null) ...[
-                    _buildNextMilestoneCard(_closestToNextLevel!),
-                    const SizedBox(height: 16),
-                  ],
                   _buildSectionHeader('種目別ベスト'),
                   const SizedBox(height: 10),
                   _buildExerciseGrid(summaries),
                 ],
                 const SizedBox(height: 24),
+                _buildSectionHeader('体重推移'),
+                const SizedBox(height: 10),
+                _buildBodyWeightChart(),
+                const SizedBox(height: 24),
                 _buildSupportAdButton(),
                 const SizedBox(height: 8),
               ],
             ),
+    );
+  }
+
+  // ── 体重推移グラフ ─────────────────────────────────────
+  Widget _buildBodyWeightChart() {
+    return TrendChartCard(
+      title: '記録日の体重値',
+      leftReserved: 40,
+      emptyMessage: 'データが不足しています',
+      series: [
+        TrendSeries(
+          label: '体重',
+          points: [
+            for (final h in _bodyWeightHistory)
+              TrendPoint(DateTime.parse(h.date), h.weight),
+          ],
+          color: kPrimary,
+          formatAxis: (v) => v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1),
+          formatTooltip: (v) => '${v.toStringAsFixed(1)}kg',
+        ),
+      ],
     );
   }
 
@@ -363,7 +415,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               const SizedBox(width: 10),
               Text(
                 'ストップウォッチ',
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: kPrimaryLight,
@@ -372,81 +424,175 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               ),
             ],
           ),
+          _buildTrainingToggle(),
           const SizedBox(height: 18),
           // 経過時間（64px 大画面表示）
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              formatHMS(_elapsed),
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 64,
-                fontWeight: FontWeight.w800,
-                color: kPrimaryLight,
-                letterSpacing: -1,
-                height: 1,
+            child: ValueListenableBuilder<Duration>(
+              valueListenable: _elapsedNotifier,
+              builder: (_, elapsed, __) => Text(
+                formatHMS(elapsed),
+                style: AppFonts.jetBrainsMono(
+                  fontSize: 64,
+                  fontWeight: FontWeight.w800,
+                  color: kPrimaryLight,
+                  letterSpacing: -1,
+                  height: 1,
+                ),
               ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             '経過時間',
-            style: GoogleFonts.jetBrainsMono(
+            style: AppFonts.jetBrainsMono(
               fontSize: 10,
               color: context.cTextSub,
               letterSpacing: 1.5,
             ),
           ),
           const SizedBox(height: 20),
-          // 操作ボタン: START / STOP / RESET
-          Row(
-            children: [
-              Expanded(
-                child: _actionButton(
-                  icon: Icons.play_arrow,
-                  label: 'START',
-                  bgColor: isRunning ? context.cCardHigh : kPrimary,
-                  fgColor: isRunning ? context.cTextSub : Colors.white,
-                  disabled: isRunning,
-                  onTap: () {
-                    StopwatchService.instance.start();
-                    _updateElapsed();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _actionButton(
-                  icon: Icons.pause,
-                  label: 'STOP',
-                  bgColor: isRunning ? context.cCardHigh : context.cCardHigh,
-                  fgColor: isRunning ? kPrimaryLight : context.cTextSub,
-                  borderColor: isRunning
-                      ? kPrimaryLight.withValues(alpha: 0.5)
-                      : null,
-                  disabled: !isRunning,
-                  onTap: () {
-                    StopwatchService.instance.stop();
-                    _updateElapsed();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _actionButton(
-                  icon: Icons.refresh,
-                  label: 'RESET',
-                  bgColor: context.cCardHigh,
-                  fgColor: context.cTextSub,
-                  onTap: () {
-                    StopwatchService.instance.reset();
-                    _updateElapsed();
-                  },
-                ),
-              ),
-            ],
+          // 操作ボタン
+          ListenableBuilder(
+            listenable: TrainingTimeService.instance,
+            builder: (context, _) => _buildStopwatchButtons(isRunning),
           ),
         ],
       ),
+    );
+  }
+
+  /// ヘッダー下: 「タイマーでトレーニング時間を記録」トグルと記録中の表示。
+  /// 設定画面のスイッチと同じ値（オンのときだけ開始・終了ボタンを表示）。
+  Widget _buildTrainingToggle() {
+    return ListenableBuilder(
+      listenable: TrainingTimeService.instance,
+      builder: (context, _) {
+        final svc = TrainingTimeService.instance;
+        final start = svc.startAt;
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'タイマーでトレーニング時間を記録',
+                    style: AppFonts.inter(
+                        fontSize: 12, color: context.cTextSub),
+                  ),
+                  const SizedBox(width: 4),
+                  Switch(
+                    value: svc.enabled,
+                    onChanged: svc.isRunning
+                        ? null // 記録中は切り替えない
+                        : (v) => svc.setEnabled(v),
+                    activeColor: kPrimary,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ],
+              ),
+              if (svc.enabled && start != null)
+                Text(
+                  'トレーニング記録中（開始 ${formatHM(start)}）',
+                  style: AppFonts.jetBrainsMono(
+                      fontSize: 10, color: kPrimaryLight),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStopwatchButtons(bool isRunning) {
+    final training = TrainingTimeService.instance;
+
+    Widget stopBtn() => _actionButton(
+      icon: Icons.pause,
+      label: 'STOP',
+      bgColor: context.cCardHigh,
+      fgColor: isRunning ? kPrimaryLight : context.cTextSub,
+      borderColor: isRunning ? kPrimaryLight.withValues(alpha: 0.5) : null,
+      disabled: !isRunning,
+      onTap: () {
+        StopwatchService.instance.stop();
+        _updateElapsed();
+      },
+    );
+    Widget resetBtn({required bool alsoTraining}) => _actionButton(
+      icon: Icons.refresh,
+      label: alsoTraining ? 'RESET（トレーニング時間の記録も中断）' : 'RESET',
+      bgColor: context.cCardHigh,
+      fgColor: context.cTextSub,
+      onTap: () async {
+        StopwatchService.instance.reset();
+        if (alsoTraining) await training.cancel(); // 中断: 時間は記録しない
+        _updateElapsed();
+      },
+    );
+
+    if (training.enabled) {
+      // 誤操作を防ぐため、4つのボタンを縦に幅いっぱいで並べる
+      final running = training.isRunning;
+      return Column(
+        children: [
+          _actionButton(
+            icon: Icons.play_arrow,
+            label: 'トレーニング開始',
+            bgColor: running ? context.cCardHigh : kPrimary,
+            fgColor: running ? context.cTextSub : Colors.white,
+            disabled: running,
+            onTap: () async {
+              StopwatchService.instance.start();
+              await training.start();
+              _updateElapsed();
+            },
+          ),
+          const SizedBox(height: 8),
+          _actionButton(
+            icon: Icons.flag,
+            label: 'トレーニング終了',
+            bgColor: context.cCardHigh,
+            fgColor: running ? kPrimaryLight : context.cTextSub,
+            borderColor:
+                running ? kPrimaryLight.withValues(alpha: 0.5) : null,
+            disabled: !running,
+            onTap: () async {
+              await training.endManually();
+              _updateElapsed();
+            },
+          ),
+          const SizedBox(height: 8),
+          stopBtn(),
+          const SizedBox(height: 8),
+          resetBtn(alsoTraining: true),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: _actionButton(
+            icon: Icons.play_arrow,
+            label: 'START',
+            bgColor: isRunning ? context.cCardHigh : kPrimary,
+            fgColor: isRunning ? context.cTextSub : Colors.white,
+            disabled: isRunning,
+            onTap: () {
+              StopwatchService.instance.start();
+              _updateElapsed();
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: stopBtn()),
+        const SizedBox(width: 8),
+        Expanded(child: resetBtn(alsoTraining: false)),
+      ],
     );
   }
 
@@ -479,7 +625,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               const SizedBox(width: 6),
               Text(
                 label,
-                style: GoogleFonts.jetBrainsMono(
+                style: AppFonts.jetBrainsMono(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: fgColor,
@@ -503,7 +649,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           const SizedBox(height: 14),
           Text(
             'まだデータがありません',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: context.cTextSub,
@@ -512,266 +658,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           const SizedBox(height: 6),
           Text(
             '＋ボタンからトレーニングを開始',
-            style: GoogleFonts.inter(
+            style: AppFonts.inter(
               fontSize: 12,
               color: context.cTextSub.withValues(alpha: 0.6),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── 総合カード ────────────────────────────────────────────────
-  Widget _buildOverallCard(List<_ExerciseSummary> summaries) {
-    // 最高レベルを「総合」として表示
-    final topTier = summaries
-        .map((s) => s.result.tier)
-        .reduce((a, b) => a.index > b.index ? a : b);
-    final avgRM = summaries.map((s) => s.maxRM).reduce((a, b) => a + b) /
-        summaries.length;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: topTier.color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('総合レベル',
-                    style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10,
-                        color: context.cTextSub,
-                        letterSpacing: 1)),
-                const SizedBox(height: 8),
-                Text(
-                  topTier.label,
-                  style: GoogleFonts.inter(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: topTier.color,
-                    letterSpacing: -1,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _statChip(
-                      '${summaries.length} 種目',
-                      Icons.fitness_center,
-                      kPrimary,
-                    ),
-                    const SizedBox(width: 8),
-                    _statChip(
-                      '平均 ${avgRM.toStringAsFixed(0)}kg',
-                      Icons.show_chart,
-                      kTertiary,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          // レベルアイコン
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: topTier.color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: topTier.color.withValues(alpha: 0.25)),
-            ),
-            child: Icon(_tierIcon(topTier), color: topTier.color, size: 36),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statChip(String label, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 4),
-          Text(label,
-              style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10, color: color, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  // ── 部位カバレッジ ──────────────────────────────────────────
-  Widget _buildMuscleCoverage() {
-    const allGroups = [
-      MuscleGroup.chest,
-      MuscleGroup.back,
-      MuscleGroup.legs,
-      MuscleGroup.shoulders,
-      MuscleGroup.arms,
-      MuscleGroup.abs,
-    ];
-    final covered = _coveredGroups;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('部位カバレッジ',
-              style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10,
-                  color: context.cTextSub,
-                  letterSpacing: 1)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: allGroups.map((g) {
-              final hit = covered.contains(g);
-              return Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: hit
-                          ? kPrimary.withValues(alpha: 0.12)
-                          : context.cCardHigh,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: hit
-                            ? kPrimary.withValues(alpha: 0.4)
-                            : Colors.transparent,
-                      ),
-                    ),
-                    child: Icon(
-                      _groupIcon(g),
-                      size: 18,
-                      color: hit ? kPrimary : context.cTextSub.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    g.label,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      color: hit ? context.cText : context.cTextSub.withValues(alpha: 0.4),
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── 次のマイルストーン ────────────────────────────────────────
-  Widget _buildNextMilestoneCard(_ExerciseSummary s) {
-    final next = s.result.nextThreshold!;
-    final diff = next - s.maxRM;
-    final nextTier = StrengthTier.values[s.result.tier.index + 1];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.cCardLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: nextTier.color.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('最も近い目標',
-              style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10,
-                  color: context.cTextSub,
-                  letterSpacing: 1)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: nextTier.color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.flag_outlined,
-                    color: nextTier.color, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      s.exercise.name,
-                      style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: context.cText),
-                    ),
-                    Text(
-                      '${s.result.tier.label} → ${nextTier.label}',
-                      style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11, color: context.cTextSub),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${next.toStringAsFixed(1)}kg',
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: nextTier.color,
-                      height: 1,
-                    ),
-                  ),
-                  Text(
-                    'あと +${diff.toStringAsFixed(1)}kg',
-                    style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10, color: context.cTextSub),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: s.result.progressInTier,
-              minHeight: 6,
-              backgroundColor: context.cCardHigh,
-              valueColor: AlwaysStoppedAnimation(nextTier.color),
             ),
           ),
         ],
@@ -783,23 +672,55 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   Widget _buildSectionHeader(String title) {
     return Text(
       title.toUpperCase(),
-      style: GoogleFonts.jetBrainsMono(
+      style: AppFonts.jetBrainsMono(
           fontSize: 10, color: context.cTextSub, letterSpacing: 1.5),
     );
   }
 
+  static const _groupOrder = [
+    MuscleGroup.chest,
+    MuscleGroup.back,
+    MuscleGroup.legs,
+    MuscleGroup.shoulders,
+    MuscleGroup.arms,
+    MuscleGroup.abs,
+  ];
+
+  /// 部位ごとにセクション分けして表示する（各部位内は1RM降順のまま）。
   Widget _buildExerciseGrid(List<_ExerciseSummary> summaries) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.35,
-      ),
-      itemCount: summaries.length,
-      itemBuilder: (_, i) => _buildExerciseCard(summaries[i]),
+    final sections = <Widget>[];
+    for (final group in _groupOrder) {
+      final items =
+          summaries.where((s) => s.exercise.muscleGroup == group).toList();
+      if (items.isEmpty) continue;
+      sections.add(Padding(
+        padding: EdgeInsets.only(top: sections.isEmpty ? 0 : 16, bottom: 8),
+        child: Text(
+          group.label,
+          style: AppFonts.jetBrainsMono(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: kPrimary,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ));
+      sections.add(GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.35,
+        ),
+        itemCount: items.length,
+        itemBuilder: (_, i) => _buildExerciseCard(items[i]),
+      ));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sections,
     );
   }
 
@@ -820,7 +741,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         decoration: BoxDecoration(
           color: context.cCardLow,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: tier.color.withValues(alpha: 0.15)),
+          border: Border.all(color: tier.colorForContext(context).withValues(alpha: 0.15)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,20 +752,20 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               children: [
                 Icon(_groupIcon(s.exercise.muscleGroup),
                     size: 16,
-                    color: tier.color.withValues(alpha: 0.8)),
+                    color: tier.colorForContext(context).withValues(alpha: 0.8)),
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: tier.color.withValues(alpha: 0.12),
+                    color: tier.colorForContext(context).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     tier.label,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppFonts.jetBrainsMono(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
-                      color: tier.color,
+                      color: tier.colorForContext(context),
                     ),
                   ),
                 ),
@@ -855,7 +776,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               children: [
                 Text(
                   s.exercise.name,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: context.cText,
@@ -868,7 +789,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   children: [
                     Text(
                       s.maxRM.toStringAsFixed(1),
-                      style: GoogleFonts.inter(
+                      style: AppFonts.inter(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: context.cText,
@@ -879,7 +800,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     Padding(
                       padding: const EdgeInsets.only(bottom: 2, left: 2),
                       child: Text('kg',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppFonts.jetBrainsMono(
                               fontSize: 11, color: context.cTextSub)),
                     ),
                   ],
@@ -923,7 +844,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             const SizedBox(width: 8),
             Text(
               isReady ? '広告を見て応援する' : '広告を準備中...',
-              style: GoogleFonts.inter(
+              style: AppFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: isReady ? kPrimary : context.cTextSub,
@@ -933,16 +854,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ),
       ),
     );
-  }
-
-  IconData _tierIcon(StrengthTier t) {
-    switch (t) {
-      case StrengthTier.beginner:     return Icons.fitness_center;
-      case StrengthTier.novice:       return Icons.trending_up;
-      case StrengthTier.intermediate: return Icons.bolt;
-      case StrengthTier.advanced:     return Icons.local_fire_department;
-      case StrengthTier.elite:        return Icons.emoji_events;
-    }
   }
 
   IconData _groupIcon(MuscleGroup g) {
