@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -199,11 +200,31 @@ class AuthService {
     if (!FirebaseInit.isReady) return;
     final user = currentUser;
     if (user == null) return;
+    // クラウド上のユーザーデータ（記録・削除の印・設定）を先に削除する。
+    // 認証が必要なため、アカウント削除より前に行う。
+    await _deleteUserData(user.uid);
     try {
       await GoogleSignIn().signOut();
     } catch (_) {}
     await user.delete();
     debugPrint('[Auth] account deleted');
+  }
+
+  Future<void> _deleteUserData(String uid) async {
+    final userDoc = FirebaseFirestore.instance.collection('users').doc(uid);
+    for (final name in ['sessions', 'deleted_sessions', 'settings']) {
+      final snap = await userDoc.collection(name).get();
+      // バッチは500件まで
+      for (var i = 0; i < snap.docs.length; i += 400) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final d in snap.docs.skip(i).take(400)) {
+          batch.delete(d.reference);
+        }
+        await batch.commit();
+      }
+    }
+    await userDoc.delete();
+    debugPrint('[Auth] cloud user data deleted');
   }
 
   // ── サインアウト ───────────────────────────────────────────────

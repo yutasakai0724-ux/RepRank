@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/workout.dart';
 import '../repositories/workout_repository.dart';
+import 'deleted_sessions_store.dart';
 import 'training_time_service.dart';
 import 'user_preferences.dart';
 
@@ -28,6 +29,24 @@ class SessionManager extends ChangeNotifier {
 
   /// 同期など外部要因でデータが更新されたことを画面に知らせる。
   void notifyDataChanged() => notifyListeners();
+
+  /// 同期で他の端末の変更を取り込んだあとに呼ぶ。進行中のセッションが更新・削除されていれば
+  /// メモリ上の内容も差し替える（古い内容で上書き保存しないように）。
+  void applyExternalChanges({
+    required List<WorkoutSession> updated,
+    required Set<String> deleted,
+  }) {
+    final a = _active;
+    if (a != null) {
+      if (deleted.contains(a.id)) {
+        _active = null;
+      } else {
+        final u = updated.where((s) => s.id == a.id).firstOrNull;
+        if (u != null) _active = u;
+      }
+    }
+    if (updated.isNotEmpty || deleted.isNotEmpty) notifyListeners();
+  }
 
   // ── アクティブセッション ──────────────────────────────────────
 
@@ -221,8 +240,11 @@ class SessionManager extends ChangeNotifier {
   Future<List<WorkoutSession>> getSessionsForDate(DateTime date) =>
       _repo.getSessionsForDate(date);
 
+  /// 記録を削除し、削除の印を残す（ログイン時の同期で、他の端末からも削除される）。
   Future<void> deleteSession(String id) async {
     _cache = null;
+    if (_active?.id == id) _active = null;
+    await DeletedSessionsStore.instance.put(id, DateTime.now());
     await _repo.deleteSession(id);
     _cache = null;
   }

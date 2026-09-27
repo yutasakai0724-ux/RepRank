@@ -125,7 +125,7 @@
   <ul>
     <li>送信先: Firebase Authentication / Firebase Firestore</li>
     <li>対象: アカウント登録（メールアドレス・Google・Apple・Facebook）を行った場合のみ</li>
-    <li>内容: ワークアウトの記録（種目名・重量・回数・日時）をクラウドにバックアップ</li>
+    <li>内容: ワークアウトの記録（種目名・重量・回数・日時・メモ・トレーニング時間）、削除した記録の識別子と削除日時、アプリ内の設定（ユーザー名・体重・性別・単位・休憩時間・ルーチン・お気に入り・追加した種目）をクラウドに保存し、デバイス間で同期</li>
     <li>目的: 機種変更時のデータ引き継ぎ、複数デバイス間での同期</li>
     <li>データはご自身のアカウントにのみ紐づけられ、他のユーザーはアクセスできません</li>
     <li>アカウント登録をしない場合、この情報は一切送信されません</li>
@@ -244,7 +244,7 @@
   <ul>
     <li>Destination: Firebase Authentication / Firebase Firestore</li>
     <li>Applies only when you create an account (email, Google, Apple, or Facebook sign-in)</li>
-    <li>Content: Workout records (exercise names, weights, reps, timestamps) backed up to the cloud</li>
+    <li>Content: Workout records (exercise names, weights, reps, timestamps, notes, training time), identifiers and deletion times of deleted records, and in-app settings (username, body weight, gender, units, rest time, routines, favorites, custom exercises), stored in the cloud and synced across devices</li>
     <li>Purpose: Data transfer when changing devices, sync across devices</li>
     <li>Data is linked exclusively to your account and is inaccessible to other users</li>
     <li>If you do not create an account, none of this information is transmitted</li>

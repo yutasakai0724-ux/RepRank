@@ -153,9 +153,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ユーザーごとのワークアウトセッション（クラウド同期）
-    // 自分のデータのみ読み書き可能
-    match /users/{uid}/sessions/{sessionId} {
+    // ユーザーごとのデータ（自分のデータのみ読み書き可能）
+    //   users/{uid}/sessions/{id}          ワークアウトセッション
+    //   users/{uid}/deleted_sessions/{id}  削除した記録の印（削除の端末間同期）
+    //   users/{uid}/settings/preferences   設定（体重・ルーチン・お気に入りなど）
+    match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 

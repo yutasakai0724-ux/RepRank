@@ -15,6 +15,22 @@ class UserPreferences {
   static const _keyRestDuration = 'rest_duration_sec';
   static const _keyShareStats   = 'share_anonymous_stats';
 
+  // ── 端末間の同期（SettingsSyncService）──────────────────────────
+  // 同期対象の値を変更したら、変更時刻を記録して同期サービスへ知らせる。
+
+  /// 同期対象の値が変わったときに呼ばれる（main で SettingsSyncService が登録する）。
+  static void Function(String key)? onSyncedChange;
+
+  /// 同期対象の各値の最終変更時刻を保存するキーの接頭辞。
+  static const syncTimePrefix = 'sync_t_';
+
+  Future<void> _touch(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        '$syncTimePrefix$key', DateTime.now().toIso8601String());
+    onSyncedChange?.call(key);
+  }
+
   // ── 体重 ──────────────────────────────────────────────────────
 
   Future<double> getBodyWeight() async {
@@ -25,6 +41,7 @@ class UserPreferences {
   Future<void> setBodyWeight(double value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keyBodyWeight, value);
+    await _touch(_keyBodyWeight);
   }
 
   // ── ユーザー名 ────────────────────────────────────────────────
@@ -37,6 +54,7 @@ class UserPreferences {
   Future<void> setUsername(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyUsername, value);
+    await _touch(_keyUsername);
   }
 
   // ── 性別 ──────────────────────────────────────────────────────
@@ -49,6 +67,7 @@ class UserPreferences {
   Future<void> setGender(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyGender, value);
+    await _touch(_keyGender);
   }
 
   // ── 休憩タイマー秒数 ───────────────────────────────────────────
@@ -61,6 +80,7 @@ class UserPreferences {
   Future<void> setRestDuration(int seconds) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyRestDuration, seconds);
+    await _touch(_keyRestDuration);
   }
 
   // ── カスタム種目 ──────────────────────────────────────────────
@@ -89,6 +109,7 @@ class UserPreferences {
     if (!raw.any((s) => s.startsWith('$name|'))) {
       raw.add('$name|${group.name}');
       await prefs.setStringList(_keyCustomExercises, raw);
+      await _touch(_keyCustomExercises);
     }
     // 削除済みの名前を再び追加した場合は、削除済みの印を外す
     await _setDeleted(name, false);
@@ -107,7 +128,10 @@ class UserPreferences {
     final prefs = await SharedPreferences.getInstance();
     final set = (prefs.getStringList(_keyDeletedCustom) ?? []).toSet();
     final changed = deleted ? set.add(name) : set.remove(name);
-    if (changed) await prefs.setStringList(_keyDeletedCustom, set.toList());
+    if (changed) {
+      await prefs.setStringList(_keyDeletedCustom, set.toList());
+      await _touch(_keyDeletedCustom);
+    }
   }
 
   /// 追加した種目の名前・部位を変更する。
@@ -124,6 +148,7 @@ class UserPreferences {
       raw.add(entry);
     }
     await prefs.setStringList(_keyCustomExercises, raw);
+    await _touch(_keyCustomExercises);
 
     if (oldName != newName) {
       List<String> swap(List<String> l) =>
@@ -146,6 +171,7 @@ class UserPreferences {
     final raw = prefs.getStringList(_keyCustomExercises) ?? [];
     raw.removeWhere((s) => s.startsWith('$name|'));
     await prefs.setStringList(_keyCustomExercises, raw);
+    await _touch(_keyCustomExercises);
     await setFavoriteExercises(
         (await getFavoriteExercises()).where((n) => n != name).toList());
     await setExerciseOrder(
@@ -212,6 +238,7 @@ class UserPreferences {
   Future<void> setIsKg(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsKg, value);
+    await _touch(_keyIsKg);
   }
 
   // ── ルーチン永続化 ─────────────────────────────────────────
@@ -249,6 +276,7 @@ class UserPreferences {
       'exercises': r['exercises'],
     })).toList();
     await prefs.setStringList(_keyRoutines, raw);
+    await _touch(_keyRoutines);
   }
 
   // ── お気に入り種目 ─────────────────────────────────────────
@@ -264,6 +292,7 @@ class UserPreferences {
   Future<void> setFavoriteExercises(List<String> names) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_keyFavoriteExercises, names);
+    await _touch(_keyFavoriteExercises);
   }
 
   // ── 種目の表示順（部位内の並び替え） ───────────────────────
@@ -280,6 +309,7 @@ class UserPreferences {
   Future<void> setExerciseOrder(List<String> order) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_keyExerciseOrder, order);
+    await _touch(_keyExerciseOrder);
   }
 
   // ── 休憩タイマー通知 ──────────────────────────────────────────

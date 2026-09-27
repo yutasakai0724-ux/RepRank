@@ -19,6 +19,7 @@ import 'services/ad_service.dart';
 import 'services/auth_service.dart';
 import 'services/sync_service.dart';
 import 'services/session_manager.dart';
+import 'services/settings_sync_service.dart';
 import 'services/training_time_service.dart';
 import 'services/user_preferences.dart';
 import 'screens/analysis_screen.dart';
@@ -59,6 +60,8 @@ void main() async {
 
   // トレーニング時間の記録状態を復元（放置による自動終了の判定も行う）
   await TrainingTimeService.instance.init();
+  // 設定の変更をクラウドへ反映する仕組みを登録（ログイン中のみ動作）
+  SettingsSyncService.instance.attach();
 
   runApp(const MyApp());
 }
@@ -98,6 +101,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // 前面に戻ったとき、放置されたトレーニング時間の記録を自動終了する
     if (state == AppLifecycleState.resumed) {
       TrainingTimeService.instance.resolveIfExpired();
+      // 他の端末での変更を取り込む（ログイン中のみ・短い間隔では行わない）
+      final user = AuthService.instance.currentUser;
+      if (user != null && !user.isAnonymous) {
+        SyncService.instance.syncOnResume(user.uid);
+      }
     }
   }
 
